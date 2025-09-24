@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% block title %} {% endblock %}
+</head>
+<body>
+    <nav>
+        <!-- Your navigation bar goes here -->
+        <ul>
+            <li><a href="{{ url_for('home') }}">Home</a></li>
+            <li><a href="{{ url_for('login') }}">Login</a></li>
+            <li><a href="{{ url_for('course') }}">Course</a></li>
+            <li><a href="{{ url_for('lessons') }}">Lessons</a></li>
+            <li><a href="{{ url_for('assignments') }}">Assignments</a></li>
+            <li><a href="{{ url_for('register') }}">Register</a></li>
+            
+        </ul>
+    </nav>
+
+
+
+
+
+
+    <section class="content">
+        {% block content %}{% endblock %}
+    </section>
+
+
+
+
+
+
+
+
+    <footer>
+        <p>&copy; 2025 My Awesome App</p>
+    </footer>
+</body>
+</html>

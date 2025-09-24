@@ -1,23 +1,39 @@
-from flask import Flask
+from flask import Flask, render_template 
 
-app = Flask('__Francesco__')
-print(__name__)
+app = Flask(__name__)
+
 @app.route("/")
-def hello_world():
-    return "Hello, bruhh!"
-
-
-@app.route("/home")
 def home():
-    return "Hello, home!"
+    return render_template('home.html',)
 
-# similar like hello make 9 other pages froms heet
-# we will make a route login (/login)
+# we have made  a home.html file and using render template
+# we have linked it with home function 
+
+## now also link other link and register with their html you made
+
+
 
 @app.route("/login")
 def login():
-    return "Login Please"
+    return render_template('login.html')
 
 @app.route("/register")
 def register():
-    return "Register Please"
+    return render_template('register.html')
+
+
+@app.route("/lessons")
+def lessons():
+    return render_template('lessons.html')
+
+@app.route("/course")
+def course():
+    return render_template('course.html')
+
+@app.route("/assignments")
+def assignments():
+    return render_template('assignments.html')
+
+
+
+app.run(debug=True)
