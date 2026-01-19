@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Course{% endblock %}
+
+{% block content %}
+    <div class="content-box">
+        <h1>📚 {{ course[1] }}</h1>
+        <p>{{ course[2] }}</p>
+        
+        <div style="margin: 30px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <a href="{{ url_for('create_lesson', course_id=course[0]) }}" style="padding: 20px; background: #04AA6D; color: white; text-decoration: none; border-radius: 8px; text-align: center; font-weight: 600; transition: all 0.3s;">➕ Add Lesson</a>
+            <a href="{{ url_for('create_assignment', course_id=course[0]) }}" style="padding: 20px; background: #2196F3; color: white; text-decoration: none; border-radius: 8px; text-align: center; font-weight: 600; transition: all 0.3s;">➕ Add Assignment</a>
+            <a href="{{ url_for('admin_dashboard') }}" style="padding: 20px; background: #666; color: white; text-decoration: none; border-radius: 8px; text-align: center; font-weight: 600; transition: all 0.3s;">← Back</a>
+        </div>
+        
+        <h2 style="margin-top: 40px;">📝 Lessons ({{ lessons|length }})</h2>
+        {% if lessons %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px;">
+            {% for lesson in lessons %}
+            <div class="card">
+                <h3>{{ lesson[2] }}</h3>
+                <p style="color: #666; font-size: 0.9rem;">Lesson {{ lesson[4] }}</p>
+                <p>{{ lesson[3][:100] }}{% if lesson[3]|length > 100 %}...{% endif %}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card">
+            <p style="color: #666;">No lessons yet. <a href="{{ url_for('create_lesson', course_id=course[0]) }}" style="color: #04AA6D; font-weight: 600;">Create one</a></p>
+        </div>
+        {% endif %}
+        
+        <h2 style="margin-top: 40px;">✓ Assignments ({{ assignments|length }})</h2>
+        {% if assignments %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px;">
+            {% for assignment in assignments %}
+            <div class="card">
+                <h3>{{ assignment[2] }}</h3>
+                <p>{{ assignment[3] }}</p>
+                {% if assignment[4] %}
+                <p style="color: #d32f2f; font-weight: 600;">📅 Due: {{ assignment[4] }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card">
+            <p style="color: #666;">No assignments yet. <a href="{{ url_for('create_assignment', course_id=course[0]) }}" style="color: #04AA6D; font-weight: 600;">Create one</a></p>
+        </div>
+        {% endif %}
+    </div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+
+{% block title %}Error{% endblock %}
+
+{% block content %}
+    <div class="content-box">
+        <div style="text-align: center;">
+            <h1 style="color: #d32f2f;">⚠️ Error</h1>
+            <p style="font-size: 1.2rem; color: #c62828; margin: 20px 0;">{{ error }}</p>
+            <a href="{{ url_for('home') }}" style="display: inline-block; background: #04AA6D; color: white; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 20px;">← Back to Home</a>
+        </div>
+    </div>
+{% endblock %}
