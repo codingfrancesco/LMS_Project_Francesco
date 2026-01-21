@@ -3,8 +3,43 @@
 {% block title %}Home{% endblock %}
 
 {% block content %}
-    <h1>Welcome to the Home Page!</h1>
-    <p>This is the unique content for the homepage.</p>
+    <h1>Welcome to the Learning Management System!</h1>
+    <p>Your comprehensive platform for online learning and course management.</p>
+    
+    <div class="grid mt-30">
+        
+        <div class="card">
+            <div class="card-header">📚 Total Courses</div>
+            <div class="card-body">
+                <h2 style="color: var(--accent-blue); font-size: 48px; margin: 0;">{{ courses_count }}</h2>
+                <p>Active courses available</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">📖 Total Topics</div>
+            <div class="card-body">
+                <h2 style="color: var(--accent-blue); font-size: 48px; margin: 0;">{{ topics_count }}</h2>
+                <p>Learning topics and lessons</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">👥 Total Users</div>
+            <div class="card-body">
+                <h2 style="color: var(--accent-blue); font-size: 48px; margin: 0;">{{ users_count }}</h2>
+                <p>Registered students</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="section mt-30">
+        <h2 class="section-title">Get Started</h2>
+        <p>Explore our courses, enroll in topics, and complete assignments to enhance your skills.</p>
+        
+        <a href="{{ url_for('course') }}" class="btn btn-primary mt-20">Browse Courses</a>
+        <a href="{{ url_for('lessons') }}" class="btn btn-secondary mt-20" style="margin-left: 10px;">View Lessons</a>
+    </div>
 {% endblock %}
 
 

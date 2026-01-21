@@ -1,0 +1,143 @@
+<!-- Extend the base template to inherit navbar, footer, and styling -->
+{% extends 'base.html' %}
+
+<!-- Override the title block - sets browser tab title -->
+{% block title %}Teacher Dashboard{% endblock %}
+
+<!-- Override the content block with teacher dashboard -->
+{% block content %}
+    <!-- Welcome heading with user's name -->
+    <!-- full_name variable is passed from the Flask route -->
+    <h1>Welcome, {{ full_name }}! 👨‍🏫</h1>
+    
+    <!-- Subheading description -->
+    <p>Manage your courses, create assignments, and track student progress.</p>
+    
+    <!-- Display error message if any -->
+    <!-- {% if error %} checks if error variable exists -->
+    {% if error %}
+        <!-- Error alert box -->
+        <div style="background-color: #fee; border: 1px solid #f88; color: #c33; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;">
+            {{ error }}
+        </div>
+    {% endif %}
+    
+    <!-- Statistics Section: Key Numbers -->
+    <div class="grid mt-30">
+        <!-- Card 1: Total courses taught -->
+        <div class="card">
+            <!-- Card header -->
+            <div class="card-header">📚 Total Courses</div>
+            
+            <!-- Card body with statistics -->
+            <div class="card-body">
+                <!-- Display total number of courses created -->
+                <!-- my_courses is passed from Flask route -->
+                <!-- my_courses | length gets the count of courses -->
+                <h2 style="color: var(--accent-blue); font-size: 48px; margin: 0;">{{ my_courses | length }}</h2>
+                
+                <!-- Descriptive text -->
+                <p>Courses you've created</p>
+            </div>
+        </div>
+        
+        <!-- Card 2: Total enrolled students -->
+        <div class="card">
+            <!-- Card header -->
+            <div class="card-header">👥 Total Students</div>
+            
+            <!-- Card body with statistics -->
+            <div class="card-body">
+                <!-- Display total students enrolled in all courses -->
+                <!-- total_students is passed from Flask route -->
+                <h2 style="color: var(--accent-blue); font-size: 48px; margin: 0;">{{ total_students or 0 }}</h2>
+                
+                <!-- Descriptive text -->
+                <p>Students enrolled</p>
+            </div>
+        </div>
+        
+        <!-- Card 3: Total assignments created -->
+        <div class="card">
+            <!-- Card header -->
+            <div class="card-header">📝 Total Assignments</div>
+            
+            <!-- Card body with statistics -->
+            <div class="card-body">
+                <!-- Display total questions/assignments created -->
+                <!-- total_assignments is passed from Flask route -->
+                <h2 style="color: var(--accent-blue); font-size: 48px; margin: 0;">{{ total_assignments or 0 }}</h2>
+                
+                <!-- Descriptive text -->
+                <p>Questions created</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Section: Your Courses -->
+    <div class="section mt-30">
+        <!-- Section title -->
+        <h2 class="section-title">Your Courses</h2>
+        
+        <!-- Check if teacher has created any courses -->
+        <!-- {% if my_courses %} checks if list is not empty -->
+        {% if my_courses %}
+            <!-- Grid container for displaying courses -->
+            <!-- grid class creates responsive columns -->
+            <div class="grid">
+                <!-- Loop through each course created by teacher -->
+                <!-- {% for course in my_courses %} iterates through courses -->
+                {% for course in my_courses %}
+                    <!-- Card for each course -->
+                    <div class="card">
+                        <!-- Card header displaying course title -->
+                        <div class="card-header">{{ course.title }}</div>
+                        
+                        <!-- Card body containing course details -->
+                        <div class="card-body">
+                            <!-- Course description -->
+                            <!-- course.description is fetched from database -->
+                            <p>{{ course.description or 'No description available' }}</p>
+                            
+                            <!-- Course creation date -->
+                            <!-- Small text showing when course was created -->
+                            <p class="text-muted"><small>
+                                Created: 
+                                <!-- course.created_at is formatted as date -->
+                                {{ course.created_at or 'Unknown' }}
+                            </small></p>
+                            
+                            <!-- Action buttons -->
+                            <!-- Two buttons: Edit and Manage -->
+                            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                                <!-- Edit course button -->
+                                <a href="#" class="btn btn-primary" style="flex: 1; text-align: center;">Edit Course</a>
+                                
+                                <!-- Manage students/assignments button -->
+                                <a href="#" class="btn btn-secondary" style="flex: 1; text-align: center;">Manage</a>
+                            </div>
+                        </div>
+                    </div>
+                <!-- End course loop -->
+                {% endfor %}
+            </div>
+        <!-- If no courses created -->
+        {% else %}
+            <!-- Message when teacher hasn't created any courses -->
+            <p class="text-muted">You haven't created any courses yet.</p>
+        <!-- End if/else -->
+        {% endif %}
+        
+        <!-- Create new course button -->
+        <!-- Button to add a new course -->
+        <a href="#" class="btn btn-primary mt-30">+ Create New Course</a>
+    </div>
+    
+    <!-- Logout button -->
+    <!-- Right-aligned button at bottom -->
+    <div style="margin-top: 30px; text-align: right;">
+        <!-- Link styled as button to logout -->
+        <!-- url_for('logout') generates URL for logout route -->
+        <a href="{{ url_for('logout') }}" class="btn btn-outline">Logout</a>
+    </div>
+{% endblock %}

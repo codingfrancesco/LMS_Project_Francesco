@@ -1,0 +1,65 @@
+<!-- Extend the base template to inherit navbar, footer, and styling -->
+{% extends 'base.html' %}
+
+<!-- Override the title block - sets browser tab title -->
+{% block title %}Courses{% endblock %}
+
+<!-- Override the content block with course-specific content -->
+{% block content %}
+    <!-- Main page heading -->
+    <h1>Available Courses</h1>
+    
+    <!-- Descriptive text for the page -->
+    <p>Explore all our available courses and start learning today.</p>
+    
+    <!-- Conditional block: only show if courses list is not empty -->
+    <!-- {% if courses %} checks if courses variable exists and has data -->
+    {% if courses %}
+        <!-- Grid container for displaying courses in a responsive layout -->
+        <!-- grid class creates responsive columns that adapt to screen size -->
+        <!-- mt-30 adds 30px top margin -->
+        <div class="grid mt-30">
+            <!-- Loop through each course in the courses list -->
+            <!-- {% for course in courses %} iterates over all courses -->
+            <!-- course is a single row object from the database query -->
+            {% for course in courses %}
+                <!-- Card container for each course -->
+                <!-- card class provides styling (background, shadow, border-radius, hover effects) -->
+                <div class="card">
+                    <!-- Card header displaying the course title -->
+                    <!-- card-header class styles with background color and bottom border -->
+                    <!-- {{ course.title }} displays the course title from database -->
+                    <div class="card-header">{{ course.title }}</div>
+                    
+                    <!-- Card body containing course details -->
+                    <!-- card-body class provides padding and text styling -->
+                    <div class="card-body">
+                        <!-- Course description -->
+                        <!-- {{ course.description }} displays course description from database -->
+                        <!-- or 'No description available' shows default text if description is empty -->
+                        <p>{{ course.description or 'No description available' }}</p>
+                        
+                        <!-- Small text showing course ID -->
+                        <!-- text-muted class makes text lighter gray color -->
+                        <!-- <small> makes the text smaller -->
+                        <p class="text-muted"><small>Course ID: {{ course.course_id }}</small></p>
+                        
+                        <!-- Enroll button linking to course enrollment -->
+                        <!-- btn class provides button styling -->
+                        <!-- btn-primary class provides blue color -->
+                        <!-- mt-20 adds 20px top margin -->
+                        <a href="#" class="btn btn-primary mt-20">Enroll Now</a>
+                    </div>
+                </div>
+            <!-- End of loop: repeats for each course -->
+            {% endfor %}
+        </div>
+    <!-- Else: show message if no courses are available -->
+    {% else %}
+        <!-- Message displayed when courses list is empty -->
+        <!-- text-muted class makes text lighter gray -->
+        <!-- mt-30 adds 30px top margin -->
+        <p class="text-muted mt-30">No courses available at the moment.</p>
+    <!-- End of if/else condition -->
+    {% endif %}
+{% endblock %}

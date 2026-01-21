@@ -3,6 +3,59 @@
 {% block title %}Register{% endblock %}
 
 {% block content %}
-    <h1>Welcome to the Register Page!</h1>
-    <p>This is where to register to join us!</p>
+    <h1>Create Your Account</h1>
+    
+    <p>Register as a student or teacher to get started with our learning platform.</p>
+    
+    <div style="max-width: 500px; margin: 40px auto; background: var(--white); padding: 40px; border-radius: 12px; box-shadow: var(--shadow-md);">
+        
+        {% if error %}
+            <div style="background-color: #fee; border: 1px solid #f88; color: #c33; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;">
+                {{ error }}
+            </div>
+        {% endif %}
+        
+        <form method="POST" action="{{ url_for('register') }}">
+            
+            <div class="form-group">
+                <label for="full_name">Full Name</label>
+                <input type="text" id="full_name" name="full_name" required placeholder="Enter your full name">
+            </div>
+            
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required placeholder="Choose a username">
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" required placeholder="Enter your email">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required minlength="6" placeholder="Minimum 6 characters">
+            </div>
+            
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" required placeholder="Re-enter your password">
+            </div>
+            
+            <div class="form-group">
+                <label for="role">Account Type</label>
+                <select id="role" name="role" required>
+                    <option value="student">Student - Take courses and complete assignments</option>
+                    <option value="teacher">Teacher - Create courses and manage students</option>
+                </select>
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Create Account</button>
+        </form>
+        
+        <p style="margin-top: 20px; text-align: center;">
+            Already have an account?
+            <a href="{{ url_for('login') }}" style="color: var(--accent-blue); font-weight: 600;">Login here</a>
+        </p>
+    </div>
 {% endblock %}

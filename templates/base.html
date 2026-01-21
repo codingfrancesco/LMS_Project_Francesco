@@ -1,45 +1,54 @@
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
-   <title>{% block title %} {% endblock %}</title> 
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}LMS{% endblock %} | Learning Management System</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
-    <nav>
-        <!-- Your navigation bar goes here -->
-        <ul>
-            <li><a href="{{ url_for('home') }}">Home</a></li>
-            <li><a href="{{ url_for('login') }}">Login</a></li>
-            <li><a href="{{ url_for('course') }}">Course</a></li>
-            <li><a href="{{ url_for('lessons') }}">Lessons</a></li>
-            <li><a href="{{ url_for('assignments') }}">Assignments</a></li>
-            <li><a href="{{ url_for('register') }}">Register</a></li>
-            
-        </ul>
-
-
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <a href="{{ url_for('home') }}">LMS</a>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="{{ url_for('home') }}" class="nav-link">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ url_for('course') }}" class="nav-link">Courses</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ url_for('lessons') }}" class="nav-link">Lessons</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ url_for('assignments') }}" class="nav-link">Assignments</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ url_for('login') }}" class="nav-link">Login</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ url_for('register') }}" class="nav-link nav-link-btn">Register</a>
+                </li>
+            </ul>
+        </div>
     </nav>
 
+    <main class="main-content">
+        <section class="content">
+            {% block content %}{% endblock %}
+        </section>
+    </main>
 
-
-
-
-
-
-
-    <section class="content">
-        {% block content %}{% endblock %}
-    </section>
-
-
-
-
-
-
-
-
-    <footer>
-        <p>&copy; 2025 My Awesome App</p>
+    <footer class="footer">
+        <div class="footer-container">
+            <p>&copy; 2025 Learning Management System. All rights reserved.</p>
+        </div>
     </footer>
 </body>
+
 </html>

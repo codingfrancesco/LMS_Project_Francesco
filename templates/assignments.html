@@ -3,6 +3,55 @@
 {% block title %}Assignments{% endblock %}
 
 {% block content %}
-    <h1>Welcome to the Assignments Page!</h1>
-    <p>This is where you get your work from!</p>
+    <h1>Assignments & Quizzes</h1>
+    
+    <p>Complete assignments and test your knowledge with our quizzes.</p>
+    
+    {% if assignments %}
+        <div class="section mt-30">
+            {% for assignment in assignments %}
+                <div class="card mb-20">
+                    <div class="card-header">
+                        Question #{{ assignment.id }}
+                        
+                        {% if assignment.topic_title %}
+                            <span class="text-muted" style="font-size: 14px;">- {{ assignment.topic_title }}</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="card-body">
+                        <p><strong>{{ assignment.question }}</strong></p>
+                        
+                        <div style="margin-left: 20px;">
+                            
+                            <label style="display: block; margin: 10px 0;">
+                                <input type="radio" name="question_{{ assignment.id }}" value="a">
+                                A) {{ assignment.option_a }}
+                            </label>
+                            
+                            <label style="display: block; margin: 10px 0;">
+                                <input type="radio" name="question_{{ assignment.id }}" value="b">
+                                B) {{ assignment.option_b }}
+                            </label>
+                            
+                            <label style="display: block; margin: 10px 0;">
+                                <input type="radio" name="question_{{ assignment.id }}" value="c">
+                                C) {{ assignment.option_c }}
+                            </label>
+                            
+                            <label style="display: block; margin: 10px 0;">
+                                <input type="radio" name="question_{{ assignment.id }}" value="d">
+                                D) {{ assignment.option_d }}
+                            </label>
+                            
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+            
+            <button class="btn btn-primary mt-20">Submit Answers</button>
+        </div>
+    {% else %}
+        <p class="text-muted mt-30">No assignments available at the moment.</p>
+    {% endif %}
 {% endblock %}

@@ -3,6 +3,29 @@
 {% block title %}Lessons{% endblock %}
 
 {% block content %}
-    <h1>Welcome to the Lessons Page!</h1>
-    <p>This is where to learn!.</p>
+    <h1>Available Lessons</h1>
+    
+    <p>Explore lessons organized by topics and courses.</p>
+    
+    {% if lessons %}
+        <div class="grid mt-30">
+            {% for lesson in lessons %}
+                <div class="card">
+                    <div class="card-header">{{ lesson.title }}</div>
+                    
+                    <div class="card-body">
+                        {% if lesson.subtitle %}
+                            <p><strong>{{ lesson.subtitle }}</strong></p>
+                        {% endif %}
+                        
+                        <p class="text-muted"><small>Course: {{ lesson.course_title or 'Uncategorized' }}</small></p>
+                        
+                        <a href="#" class="btn btn-primary mt-20">Start Lesson</a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-muted mt-30">No lessons available at the moment.</p>
+    {% endif %}
 {% endblock %}

@@ -1,0 +1,344 @@
+<!-- Extend the base template to inherit navbar, footer, and styling -->
+{% extends 'base.html' %}
+
+<!-- Override the title block - sets browser tab title -->
+{% block title %}Student Dashboard{% endblock %}
+
+<!-- Override the content block with student dashboard -->
+{% block content %}
+    <!-- Welcome heading with user's name -->
+    <!-- full_name variable is passed from the Flask route -->
+    <h1>Welcome, {{ full_name }}! 👋</h1>
+    
+    <!-- Subheading description -->
+    <p>Your learning journey starts here. Browse courses, complete assignments, and track your progress.</p>
+    
+    <!-- Display error message if any -->
+    <!-- {% if error %} checks if error variable exists -->
+    {% if error %}
+        <!-- Error alert box -->
+        <!-- background-color is light red (#fee) for warning -->
+        <!-- border-color is darker red (#f88) -->
+        <!-- text-color is red (#c33) for emphasis -->
+        <!-- padding provides spacing inside the box -->
+        <!-- border-radius rounds the corners -->
+        <div style="background-color: #fee; border: 1px solid #f88; color: #c33; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;">
+            <!-- Display the error message text -->
+            {{ error }}
+        </div>
+    <!-- End error block -->
+    {% endif %}
+    
+    <!-- Display success message if enrollment was successful -->
+    <!-- {% if success %} checks if success variable exists -->
+    {% if success %}
+        <!-- Success alert box -->
+        <!-- background-color is light green (#efe) for success -->
+        <!-- border-color is darker green (#8d8) -->
+        <!-- text-color is green (#3a3) for positive feedback -->
+        <div style="background-color: #efe; border: 1px solid #8d8; color: #3a3; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;">
+            <!-- Display the success message text -->
+            {{ success }}
+        </div>
+    <!-- End success block -->
+    {% endif %}
+    
+    <!-- Section: Enrolled Courses -->
+    <!-- section class provides spacing and semantic structure -->
+    <!-- mt-30 adds 30px top margin for separation -->
+    <div class="section mt-30">
+        <!-- Section title with border-bottom styling -->
+        <!-- section-title class styles with color, size, and bottom border -->
+        <h2 class="section-title">Your Enrolled Courses</h2>
+        
+        <!-- Check if student is enrolled in any courses -->
+        <!-- {% if enrolled_courses %} checks if list is not empty -->
+        {% if enrolled_courses %}
+            <!-- Grid container for displaying courses -->
+            <!-- grid class creates responsive columns that adapt to screen size -->
+            <div class="grid">
+                <!-- Loop through each enrolled course -->
+                <!-- {% for course in enrolled_courses %} iterates through courses list -->
+                <!-- course is a single row object containing course data from database -->
+                {% for course in enrolled_courses %}
+                    <!-- Card container for each course -->
+                    <!-- card class provides white background, shadow, border-radius, and hover effects -->
+                    <div class="card">
+                        <!-- Card header displaying course title -->
+                        <!-- card-header class styles with background color and bottom border -->
+                        <!-- {{ course.title }} displays the course name from database -->
+                        <div class="card-header">{{ course.title }}</div>
+                        
+                        <!-- Card body containing course details -->
+                        <!-- card-body class provides padding and text styling -->
+                        <div class="card-body">
+                            <!-- Course description -->
+                            <!-- {{ course.description }} displays course description from database -->
+                            <!-- or 'No description available' shows default text if description is null/empty -->
+                            <p>{{ course.description or 'No description available' }}</p>
+                            
+                            <!-- Teacher information section -->
+                            <!-- Small text showing which teacher/instructor created the course -->
+                            <!-- text-muted class makes text lighter gray color for secondary info -->
+                            <!-- <small> tag reduces font size for less important information -->
+                            <p class="text-muted"><small>
+                                <!-- Label text: "Instructor:" -->
+                                Instructor: 
+                                <!-- {{ course.teacher_name }} displays the teacher's full name from database -->
+                                <!-- or 'Unassigned' shows default if no teacher is assigned -->
+                                {{ course.teacher_name or 'Unassigned' }}
+                            </small></p>
+                            
+                            <!-- Progress bar section -->
+                            <!-- Shows student's learning progress in the course (0-100%) -->
+                            <!-- style attribute applies inline CSS for custom styling -->
+                            <div style="margin: 15px 0;">
+                                <!-- Progress label showing percentage -->
+                                <!-- <small> reduces font size -->
+                                <!-- color: var(--medium-text) uses CSS variable for text color -->
+                                <small style="color: var(--medium-text);">
+                                    <!-- Text: "Progress:" -->
+                                    Progress: 
+                                    <!-- {{ course.progress or 0 }} displays progress percentage or 0 if null -->
+                                    {{ course.progress or 0 }}%
+                                </small>
+                                
+                                <!-- Progress bar background container -->
+                                <!-- background-color: var(--bg-light) uses CSS variable for light background -->
+                                <!-- border-radius: 8px creates rounded corners -->
+                                <!-- height: 8px sets vertical height of progress bar -->
+                                <!-- margin-top: 5px adds space between label and bar -->
+                                <!-- overflow: hidden clips progress fill inside the background -->
+                                <div style="background-color: var(--bg-light); border-radius: 8px; height: 8px; margin-top: 5px; overflow: hidden;">
+                                    <!-- Progress fill bar (blue color) -->
+                                    <!-- background-color: var(--accent-blue) uses CSS variable for blue color -->
+                                    <!-- height: 100% fills the parent container vertically -->
+                                    <!-- width: {{ course.progress or 0 }}% fills horizontally based on progress percentage -->
+                                    <!-- transition: width 0.3s ease animates the width change smoothly over 0.3 seconds -->
+                                   
+                                </div>
+                            </div>
+                            
+                            <!-- Action buttons section -->
+                            <!-- flexbox layout creates horizontal button arrangement -->
+                            <!-- display: flex enables flexbox -->
+                            <!-- gap: 10px adds 10px space between buttons -->
+                            <!-- margin-top: 15px adds space above buttons -->
+                            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                                <!-- Continue Learning button -->
+                                <!-- btn class provides button styling (padding, border-radius, colors) -->
+                                <!-- btn-primary class provides blue primary color -->
+                                <!-- flex: 1 makes button take equal width in flex container -->
+                                <!-- text-align: center centers text inside button -->
+                                <!-- Links to course content page (placeholder #) -->
+                                <a href="#" class="btn btn-primary" style="flex: 1; text-align: center;">
+                                    <!-- Button text -->
+                                    📚 Continue Learning
+                                </a>
+                                
+                                <!-- View Assignments button -->
+                                <!-- btn-secondary class provides darker blue color -->
+                                <!-- flex: 1 makes button take equal width -->
+                                <!-- Links to assignments page (placeholder #) -->
+                                <a href="#" class="btn btn-secondary" style="flex: 1; text-align: center;">
+                                    <!-- Button text -->
+                                    ✏️ Assignments
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                <!-- End of loop: repeats for each enrolled course -->
+                {% endfor %}
+            </div>
+        <!-- If no courses enrolled -->
+        {% else %}
+            <!-- Message when student hasn't enrolled in any courses yet -->
+            <!-- text-muted class makes text lighter gray for secondary info -->
+            <p class="text-muted">You haven't enrolled in any courses yet.</p>
+            
+            <!-- Browse courses button -->
+            <!-- btn class provides button styling -->
+            <!-- btn-primary class provides blue primary color -->
+            <!-- mt-20 adds 20px top margin -->
+            <!-- url_for('course') generates the URL for the course route -->
+            <a href="{{ url_for('course') }}" class="btn btn-primary mt-20">Browse Available Courses</a>
+        <!-- End if/else block -->
+        {% endif %}
+    </div>
+    
+    <!-- Section: Available Courses to Browse -->
+    <!-- section class provides spacing and semantic structure -->
+    <!-- mt-30 adds 30px top margin for separation from section above -->
+    <div class="section mt-30">
+        <!-- Section title for courses student can enroll in -->
+        <!-- section-title class styles with color, size, and bottom border -->
+        <h2 class="section-title">Explore More Courses</h2>
+        
+        <!-- Paragraph showing count of available courses -->
+        <!-- available_courses_count is a number passed from Flask route -->
+        <p>There are <strong>{{ available_courses_count }}</strong> more courses available for you to explore.</p>
+        
+        <!-- Description of available courses -->
+        <p style="color: var(--light-text); font-size: 14px;">
+            <!-- Explanatory text -->
+            Expand your skills by enrolling in new courses. Each course includes lessons, assignments, and quizzes to help you learn effectively.
+        </p>
+        
+        <!-- Browse all courses button -->
+        <!-- btn class provides button styling -->
+        <!-- btn-secondary class provides darker blue color -->
+        <!-- mt-20 adds 20px top margin -->
+        <!-- url_for('course') generates the URL for the course listing route -->
+        <a href="{{ url_for('course') }}" class="btn btn-secondary mt-20">📖 Browse All Courses</a>
+    </div>
+    
+    <!-- Section: Recent Activity / Quick Stats -->
+    <!-- mt-30 adds 30px top margin for separation -->
+    <div class="section mt-30">
+        <!-- Section title -->
+        <h2 class="section-title">Your Statistics</h2>
+        
+        <!-- Grid for displaying quick statistics -->
+        <!-- grid class creates responsive columns -->
+        <div class="grid">
+            <!-- Stat Card 1: Total Enrolled Courses -->
+            <!-- card class provides styling -->
+            <div class="card" style="text-align: center;">
+                <!-- Stat header -->
+                <div class="card-header">📚 Courses Enrolled</div>
+                <!-- Stat value -->
+                <div class="card-body">
+                    <!-- Display count of enrolled courses -->
+                    <!-- enrolled_courses | length counts items in the list -->
+                    <h2 style="color: var(--accent-blue); font-size: 42px; margin: 10px 0;">
+                        {{ enrolled_courses | length }}
+                    </h2>
+                    <!-- Stat description -->
+                    <p style="color: var(--light-text); font-size: 14px;">Active courses</p>
+                </div>
+            </div>
+            
+            <!-- Stat Card 2: Average Progress -->
+            <!-- Displays average progress across all courses -->
+            <div class="card" style="text-align: center;">
+                <!-- Stat header -->
+                <div class="card-header">📊 Average Progress</div>
+                <!-- Stat value -->
+                <div class="card-body">
+                    <!-- Calculate and display average progress -->
+                    <!-- This is a placeholder - would need backend calculation -->
+                    <h2 style="color: var(--accent-blue); font-size: 42px; margin: 10px 0;">
+                        0%
+                    </h2>
+                    <!-- Stat description -->
+                    <p style="color: var(--light-text); font-size: 14px;">Across all courses</p>
+                </div>
+            </div>
+            
+            <!-- Stat Card 3: Assignments Completed -->
+            <!-- Displays number of completed assignments -->
+            <div class="card" style="text-align: center;">
+                <!-- Stat header -->
+                <div class="card-header">✅ Completed</div>
+                <!-- Stat value -->
+                <div class="card-body">
+                    <!-- Count of completed assignments -->
+                    <!-- This is a placeholder - would need backend calculation -->
+                    <h2 style="color: var(--accent-blue); font-size: 42px; margin: 10px 0;">
+                        0
+                    </h2>
+                    <!-- Stat description -->
+                    <p style="color: var(--light-text); font-size: 14px;">Assignments submitted</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Section: Learning Tips -->
+    <!-- mt-30 adds 30px top margin for separation -->
+    <div class="section mt-30">
+        <!-- Section title -->
+        <h2 class="section-title">Learning Tips</h2>
+        
+        <!-- Tips in a list format -->
+        <!-- ul creates unordered list -->
+        <ul style="line-height: 1.9; color: var(--medium-text);">
+            <!-- Tip 1: Consistency -->
+            <!-- li is list item -->
+            <li>
+                <!-- Emoji for visual interest -->
+                📅 
+                <!-- Tip text -->
+                <strong>Be Consistent:</strong> Study regularly and dedicate specific times each day to your courses.
+            </li>
+            
+            <!-- Tip 2: Complete Assignments -->
+            <li>
+                <!-- Emoji for visual interest -->
+                ✏️ 
+                <!-- Tip text -->
+                <strong>Complete Assignments:</strong> Practice with assignments and quizzes to reinforce your learning.
+            </li>
+            
+            <!-- Tip 3: Ask Questions -->
+            <li>
+                <!-- Emoji for visual interest -->
+                💬 
+                <!-- Tip text -->
+                <strong>Ask Questions:</strong> Don't hesitate to reach out to your instructor if you need clarification.
+            </li>
+            
+            <!-- Tip 4: Review Material -->
+            <li>
+                <!-- Emoji for visual interest -->
+                🔄 
+                <!-- Tip text -->
+                <strong>Review Material:</strong> Go back and review lessons regularly to strengthen your understanding.
+            </li>
+        </ul>
+    </div>
+    
+    <!-- Bottom Navigation Section -->
+    <!-- margin-top: 40px adds space above this section -->
+    <div style="margin-top: 40px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+        <!-- Flex container for bottom buttons -->
+        <!-- display: flex enables flexbox layout -->
+        <!-- justify-content: space-between spreads buttons to left and right -->
+        <!-- gap: 10px adds space between buttons -->
+        <div style="display: flex; justify-content: space-between; gap: 10px;">
+            <!-- Left-side buttons -->
+            <!-- flex: 1 makes section take available space -->
+            <div style="flex: 1;">
+                <!-- Profile/Settings button -->
+                <!-- btn class provides button styling -->
+                <!-- btn-outline class provides outlined button style -->
+                <a href="#" class="btn btn-outline">⚙️ Account Settings</a>
+            </div>
+            
+            <!-- Right-side buttons -->
+            <!-- flex: 1 makes section take available space -->
+            <!-- text-align: right aligns buttons to the right -->
+            <div style="flex: 1; text-align: right;">
+                <!-- Logout button -->
+                <!-- btn class provides button styling -->
+                <!-- btn-outline class provides outlined button style -->
+                <!-- url_for('logout') generates the URL for logout route -->
+                <a href="{{ url_for('logout') }}" class="btn btn-outline">🚪 Logout</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Footer note -->
+    <!-- margin-top: 20px adds spacing -->
+    <!-- text-align: center centers the text -->
+    <!-- color: var(--light-text) makes text lighter gray -->
+    <!-- font-size: 12px makes text smaller for footer info -->
+    <div style="margin-top: 20px; text-align: center; color: var(--light-text); font-size: 12px;">
+        <!-- Footer text with help information -->
+        Need help? Visit our 
+        <!-- Help link -->
+        <a href="#" style="color: var(--accent-blue);">Help Center</a>
+        <!-- Footer text continued -->
+        or contact support.
+    </div>
+{% endblock %}
