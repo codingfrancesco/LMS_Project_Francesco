@@ -565,6 +565,383 @@ def teacher_dashboard():
         return render_template('teacher_dashboard.html', my_courses=[], error='Error loading courses')
 
 
+# Define route for admin dashboard
+@app.route("/admin_dashboard")
+def admin_dashboard():
+    """
+    Display the admin dashboard with user and course management.
+    
+    Only accessible to logged-in admins (teachers with admin role).
+    
+    Returns:
+        Rendered admin dashboard template with user and course statistics
+    """
+    # Check if user is logged in by checking if 'user_id' exists in session
+    if 'user_id' not in session:
+        # Redirect to login if not logged in
+        return redirect(url_for('login'))
+    
+    # Check if user role is 'admin'
+    if session.get('role') != 'teacher':
+        # Redirect to home if not an admin (maybe a student)
+        return redirect(url_for('home'))
+    
+    try:
+        # Establish connection to the database
+        conn = get_db_connection()
+        # Create cursor object to execute SQL queries
+        cursor = conn.cursor()
+        
+        # Count total registered users
+        cursor.execute("SELECT COUNT(*) as count FROM users")
+        users_count = cursor.fetchone()['count']
+        
+        # Count total courses available
+        cursor.execute("SELECT COUNT(*) as count FROM courses")
+        courses_count = cursor.fetchone()['count']
+        
+        # Fetch latest 10 users registered
+        cursor.execute("SELECT * FROM users ORDER BY created_at DESC LIMIT 10")
+        users = cursor.fetchall()
+        
+        # Fetch latest 10 courses created
+        cursor.execute("SELECT * FROM courses ORDER BY created_at DESC LIMIT 10")
+        courses = cursor.fetchall()
+        
+        # Close connection
+        conn.close()
+        
+        # Render admin dashboard template with statistics
+        return render_template('admin_dashboard.html',
+                             users_count=users_count,
+                             courses_count=courses_count,
+                             users=users,
+                             courses=courses)
+    except Exception as e:
+        # Handle any database errors
+        return render_template('admin_dashboard.html', error='Error loading admin data')
+
+
+# Define route for course creation page (GET and POST)
+@app.route("/create_course", methods=['GET', 'POST'])
+def create_course():
+    """
+    Handle course creation for both GET (display form) and POST (process form).
+    
+    GET: Display course creation form
+    POST: Process course creation form submission
+    
+    Returns:
+        GET: Rendered course creation form template
+        POST: Redirect to course management page on success or back to create course on error
+    """
+    # Check if user is logged in by checking if 'user_id' exists in session
+    if 'user_id' not in session:
+        # Redirect to login if not logged in
+        return redirect(url_for('login'))
+    
+    # Check if user role is 'teacher'
+    if session.get('role') != 'teacher':
+        # Redirect to home if not a teacher (maybe a student)
+        return redirect(url_for('home'))
+    
+    # If request is POST (form submission)
+    if request.method == 'POST':
+        # Extract form data from the course creation form
+        title = request.form.get('title')
+        description = request.form.get('description')
+        
+        # Validation: Check if course title is provided
+        if not title:
+            # Return error message if course title is empty
+            return render_template('create_course.html', error='Course title is required!')
+        
+        try:
+            # Establish connection to the database
+            conn = get_db_connection()
+            # Create cursor object to execute SQL commands
+            cursor = conn.cursor()
+            
+            # Execute SQL INSERT to add new course to database
+            cursor.execute("""
+                INSERT INTO courses (title, description, teacher_id)
+                VALUES (?, ?, ?)
+            """, (title, description, session['user_id']))
+            
+            # Commit the changes to the database
+            conn.commit()
+            # Get the ID of the newly created course
+            course_id = cursor.lastrowid
+            # Close the connection
+            conn.close()
+            
+            # Render success message and new course ID
+            return render_template('create_course.html', 
+                                 success='Course created successfully!',
+                                 course_id=course_id)
+        
+        except sqlite3.IntegrityError as e:
+            if 'UNIQUE constraint failed' in str(e):
+                return render_template('create_course.html', error='A course with this title already exists! Please use a different title.')
+            else:
+                return render_template('create_course.html', error='Database error. Please try again.')
+        except Exception as e:
+            return render_template('create_course.html', error=f'Error creating course: {str(e)}')
+    
+    # If request is GET (display form)
+    # Render the course creation form template
+    return render_template('create_course.html')
+
+
+# Define route for course management page
+@app.route("/manage_course/<int:course_id>", methods=['GET', 'POST'])
+def manage_course(course_id):
+    """
+    Display and manage a specific course: view details, lessons, and assignments.
+    
+    Only accessible to the teacher who created the course.
+    
+    Args:
+        course_id (int): ID of the course to manage
+    
+    Returns:
+        Rendered course management template with course details, lessons, and assignments
+    """
+    # Check if user is logged in by checking if 'user_id' exists in session
+    if 'user_id' not in session:
+        # Redirect to login if not logged in
+        return redirect(url_for('login'))
+    
+    # Check if user role is 'teacher'
+    if session.get('role') != 'teacher':
+        # Redirect to home if not a teacher (maybe a student)
+        return redirect(url_for('home'))
+    
+    try:
+        # Establish connection to the database
+        conn = get_db_connection()
+        # Create cursor object to execute SQL queries
+        cursor = conn.cursor()
+        
+        # Fetch the course details for the given course ID
+        cursor.execute("""
+            SELECT * FROM courses
+            WHERE id = ? AND teacher_id = ?
+        """, (course_id, session['user_id']))
+        course = cursor.fetchone()
+        
+        # If course not found or doesn't belong to this teacher, show error
+        if not course:
+            return render_template('error.html', error='Course not found or unauthorized!')
+        
+        # Fetch all lessons (topics) for this course
+        cursor.execute("""
+            SELECT id, title, subtitle, created_at
+            FROM topics
+            WHERE course_id = ?
+            ORDER BY created_at DESC
+        """, (course_id,))
+        lessons = cursor.fetchall()
+        
+        # Fetch all assignments (questions) for this course
+        cursor.execute("""
+            SELECT id, question, created_at
+            FROM msqs
+            WHERE topic_id IN (SELECT id FROM topics WHERE course_id = ?)
+            ORDER BY created_at DESC
+        """, (course_id,))
+        assignments = cursor.fetchall()
+        
+        # Close connection
+        conn.close()
+        
+        # Render course management template with course details, lessons, and assignments
+        return render_template('manage_course.html',
+                             course=course,
+                             lessons=lessons,
+                             assignments=assignments)
+    
+    except Exception as e:
+        # Handle any database errors
+        return render_template('error.html', error='Error loading course!')
+
+
+# Define route for lesson creation page
+@app.route("/create_lesson/<int:course_id>", methods=['GET', 'POST'])
+def create_lesson(course_id):
+    """
+    Handle lesson creation for both GET (display form) and POST (process form).
+    
+    GET: Display lesson creation form
+    POST: Process lesson creation form submission
+    
+    Args:
+        course_id (int): ID of the course to create lesson for
+    
+    Returns:
+        GET: Rendered lesson creation form template
+        POST: Redirect to course management page on success or back to create lesson on error
+    """
+    # Check if user is logged in by checking if 'user_id' exists in session
+    if 'user_id' not in session:
+        # Redirect to login if not logged in
+        return redirect(url_for('login'))
+    
+    # Check if user role is 'teacher'
+    if session.get('role') != 'teacher':
+        # Redirect to home if not a teacher (maybe a student)
+        return redirect(url_for('home'))
+    
+    try:
+        # Establish connection to the database
+        conn = get_db_connection()
+        # Create cursor object to execute SQL queries
+        cursor = conn.cursor()
+        
+        # Fetch the course details for the given course ID
+        cursor.execute("""
+            SELECT * FROM courses
+            WHERE id = ? AND teacher_id = ?
+        """, (course_id, session['user_id']))
+        course = cursor.fetchone()
+        
+        # If course not found or doesn't belong to this teacher, show error
+        if not course:
+            return render_template('error.html', error='Course not found or unauthorized!')
+        
+        # If request is POST (form submission)
+        if request.method == 'POST':
+            # Extract form data from the lesson creation form
+            title = request.form.get('title')
+            subtitle = request.form.get('content')
+            
+            # Validation: Check if lesson title is provided
+            if not title:
+                # Return error message if lesson title is empty
+                return render_template('create_lesson.html', course=course, error='Lesson title is required!')
+            
+            # Execute SQL INSERT to add new lesson (topic) to database
+            cursor.execute("""
+                INSERT INTO topics (course_id, title, subtitle)
+                VALUES (?, ?, ?)
+            """, (course_id, title, subtitle))
+            
+            # Commit the changes to the database
+            conn.commit()
+            # Close the connection
+            conn.close()
+            
+            # Render success message
+            return render_template('create_lesson.html', 
+                                 course=course,
+                                 success='Lesson created successfully!')
+        
+        # If request is GET (display form)
+        # Render the lesson creation form template
+        conn.close()
+        return render_template('create_lesson.html', course=course)
+    
+    except Exception as e:
+        # Handle any unexpected errors
+        return render_template('error.html', error='Error creating lesson!')
+
+
+# Define route for assignment creation page
+@app.route("/create_assignment/<int:course_id>", methods=['GET', 'POST'])
+def create_assignment(course_id):
+    """
+    Handle assignment creation for both GET (display form) and POST (process form).
+    
+    GET: Display assignment creation form
+    POST: Process assignment creation form submission
+    
+    Args:
+        course_id (int): ID of the course to create assignment for
+    
+    Returns:
+        GET: Rendered assignment creation form template
+        POST: Redirect to course management page on success or back to create assignment on error
+    """
+    # Check if user is logged in by checking if 'user_id' exists in session
+    if 'user_id' not in session:
+        # Redirect to login if not logged in
+        return redirect(url_for('login'))
+    
+    # Check if user role is 'teacher'
+    if session.get('role') != 'teacher':
+        # Redirect to home if not a teacher (maybe a student)
+        return redirect(url_for('home'))
+    
+    try:
+        # Establish connection to the database
+        conn = get_db_connection()
+        # Create cursor object to execute SQL queries
+        cursor = conn.cursor()
+        
+        # Fetch the course details for the given course ID
+        cursor.execute("""
+            SELECT * FROM courses
+            WHERE id = ? AND teacher_id = ?
+        """, (course_id, session['user_id']))
+        course = cursor.fetchone()
+        
+        # If course not found or doesn't belong to this teacher, show error
+        if not course:
+            return render_template('error.html', error='Course not found or unauthorized!')
+        
+        # Fetch all topics (lessons) for this course
+        cursor.execute("""
+            SELECT id, title FROM topics
+            WHERE course_id = ?
+            ORDER BY created_at DESC
+        """, (course_id,))
+        topics = cursor.fetchall()
+        
+        # If request is POST (form submission)
+        if request.method == 'POST':
+            # Extract form data from the assignment creation form
+            topic_id = request.form.get('topic_id')
+            question = request.form.get('question')
+            option_a = request.form.get('option_a')
+            option_b = request.form.get('option_b')
+            option_c = request.form.get('option_c')
+            option_d = request.form.get('option_d')
+            correct_answer = request.form.get('correct_answer')
+            
+            # Validation: Check if all fields are filled
+            if not all([topic_id, question, option_a, option_b, option_c, option_d, correct_answer]):
+                return render_template('create_assignment.html', 
+                                     course=course, 
+                                     topics=topics,
+                                     error='All fields are required!')
+            
+            # Execute SQL INSERT to add new assignment (question) to database
+            cursor.execute("""
+                INSERT INTO msqs (topic_id, question, option_a, option_b, option_c, option_d, correct_answer)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (topic_id, question, option_a, option_b, option_c, option_d, correct_answer))
+            
+            # Commit the changes to the database
+            conn.commit()
+            # Close the connection
+            conn.close()
+            
+            # Render success message
+            return render_template('create_assignment.html',
+                                 course=course,
+                                 topics=topics,
+                                 success='Assignment created successfully!')
+        
+        # If request is GET (display form)
+        # Render the assignment creation form template
+        conn.close()
+        return render_template('create_assignment.html', course=course, topics=topics)
+    
+    except Exception as e:
+        # Handle any unexpected errors
+        return render_template('error.html', error='Error creating assignment!')
+
+
 # Define route for lessons page
 @app.route("/lessons")
 def lessons():
@@ -697,6 +1074,76 @@ def assignments():
     # Render assignments.html template and pass assignments data as variable
     # The template can loop through this data with {% for assignment in assignments %}
     return render_template('assignments.html', assignments=assignments_data)
+
+
+# Define route for enrolling in a course
+@app.route("/enroll/<int:course_id>")
+def enroll_course(course_id):
+    """
+    Enroll a student in a course.
+    
+    Args:
+        course_id (int): ID of the course to enroll in
+    
+    Returns:
+        Redirect to student dashboard
+    """
+    # Check if user is logged in by checking if 'user_id' exists in session
+    if 'user_id' not in session:
+        # Redirect to login if not logged in
+        return redirect(url_for('login'))
+    
+    # Check if user role is 'student'
+    if session.get('role') != 'student':
+        # Redirect to home if not a student (maybe a teacher)
+        return redirect(url_for('home'))
+    
+    try:
+        # Establish connection to the database
+        conn = get_db_connection()
+        # Create cursor object to execute SQL commands
+        cursor = conn.cursor()
+        
+        # Execute SQL INSERT to add new enrollment record
+        cursor.execute("""
+            INSERT INTO enrollments (student_id, course_id)
+            VALUES (?, ?)
+        """, (session['user_id'], course_id))
+        
+        # Commit the changes to the database
+        conn.commit()
+        # Close the connection
+        conn.close()
+    except sqlite3.IntegrityError:
+        # Handle case where enrollment already exists (duplicate key)
+        pass
+    
+    # Redirect to student dashboard after enrolling
+    return redirect(url_for('student_dashboard'))
+
+
+# Define error handler for 404 Not Found
+@app.errorhandler(404)
+def error_404(error):
+    """
+    Handle 404 Not Found errors.
+    
+    Returns:
+        Rendered error page template with error message
+    """
+    return render_template('error.html', error='Page not found!'), 404
+
+
+# Define error handler for 500 Internal Server Error
+@app.errorhandler(500)
+def error_500(error):
+    """
+    Handle 500 Internal Server Error.
+    
+    Returns:
+        Rendered error page template with error message
+    """
+    return render_template('error.html', error='Internal server error!'), 500
 
 
 # Initialize database tables on application startup

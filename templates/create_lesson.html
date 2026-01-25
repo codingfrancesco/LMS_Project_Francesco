@@ -3,9 +3,9 @@
 {% block title %}Create Lesson{% endblock %}
 
 {% block content %}
-    <div class="content-box">
+    <div style="max-width: 600px; margin: 40px auto;">
         <h1>📝 Create New Lesson</h1>
-        <p>Add a lesson to <strong>{{ course[1] }}</strong></p>
+        <p>Add a lesson to <strong>{{ course.title }}</strong></p>
         
         {% if error %}
         <div style="background: #ffe6e6; border-left: 4px solid #d32f2f; padding: 15px; border-radius: 8px; margin-bottom: 20px; color: #c62828;">
@@ -19,21 +19,30 @@
         </div>
         {% endif %}
         
-        <form method="POST" action="">
-            <div>
-                <label for="title">📖 Lesson Title:</label>
-                <input type="text" id="title" name="title" required placeholder="e.g., Variables and Data Types">
+        <form method="POST" style="background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <div style="margin-bottom: 20px;">
+                <label for="title" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📖 Lesson Title:</label>
+                <input type="text" id="title" name="title" required placeholder="e.g., Variables and Data Types" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
             </div>
             
-            <div>
-                <label for="content">📚 Lesson Content:</label>
-                <textarea id="content" name="content" placeholder="Enter the lesson content here..." style="height: 250px;"></textarea>
+            <div style="margin-bottom: 20px;">
+                <label for="subtitle" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📝 Lesson Subtitle:</label>
+                <input type="text" id="subtitle" name="subtitle" placeholder="e.g., Understanding variables in Python" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
             </div>
             
-            <div style="margin-top: 25px; display: flex; gap: 10px;">
-                <input type="submit" value="Create Lesson" style="flex: 1; padding: 14px;">
-                <a href="{{ url_for('manage_course', course_id=course[0]) }}" style="flex: 1; padding: 14px; background: #666; color: white; text-align: center; border-radius: 8px; text-decoration: none; font-weight: 600;">Cancel</a>
+            <div style="margin-bottom: 20px;">
+                <label for="content" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📚 Lesson Content:</label>
+                <textarea id="content" name="content" placeholder="Enter the lesson content here..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; height: 200px; resize: vertical; box-sizing: border-box;"></textarea>
             </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <input type="submit" value="Create Lesson" style="flex: 1; padding: 12px; background: var(--accent-blue); color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: 600; cursor: pointer;">
+                <a href="{{ url_for('manage_course', course_id=course.id) }}" style="flex: 1; padding: 12px; background: #666; color: white; text-align: center; border-radius: 4px; text-decoration: none; font-weight: 600;">Cancel</a>
+            </div>
+            
+            <p style="text-align: center; margin-top: 20px; color: #666;">
+                <a href="{{ url_for('teacher_dashboard') }}" style="color: var(--accent-blue); text-decoration: none; font-weight: 600;">← Back to Dashboard</a>
+            </p>
         </form>
     </div>
 {% endblock %}

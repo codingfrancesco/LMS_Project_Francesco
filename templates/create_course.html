@@ -3,42 +3,45 @@
 {% block title %}Create Course{% endblock %}
 
 {% block content %}
-    <div class="content-box">
+    <div style="max-width: 600px; margin: 40px auto;">
         <h1>📚 Create New Course</h1>
         <p>Add a new course to the learning management system.</p>
         
         {% if error %}
-        <div style="background: #ffe6e6; border-left: 4px solid #d32f2f; padding: 15px; border-radius: 8px; margin-bottom: 20px; color: #c62828;">
-            <strong>⚠️ Error:</strong> {{ error }}
-        </div>
+            <div style="background: #ffe6e6; border-left: 4px solid #d32f2f; padding: 15px; border-radius: 8px; margin-bottom: 20px; color: #c62828;">
+                <strong>⚠️ Error:</strong> {{ error }}
+            </div>
         {% endif %}
         
         {% if success %}
-        <div style="background: #e6ffe6; border-left: 4px solid #2e7d32; padding: 15px; border-radius: 8px; margin-bottom: 20px; color: #1b5e20;">
-            <strong>✓ Success:</strong> {{ success }}
-            <p style="margin-top: 10px;">
-                <a href="{{ url_for('manage_course', course_id=course_id) }}" style="color: #2e7d32; text-decoration: none; font-weight: 600;">Manage Course →</a>
-            </p>
-        </div>
+            <div style="background: #e6ffe6; border-left: 4px solid #2e7d32; padding: 15px; border-radius: 8px; margin-bottom: 20px; color: #1b5e20;">
+                <strong>✓ Success:</strong> {{ success }}
+                <p style="margin-top: 10px;">
+                    <a href="{{ url_for('manage_course', course_id=course_id) }}" style="color: #2e7d32; text-decoration: none; font-weight: 600;">Manage Course →</a>
+                </p>
+            </div>
         {% endif %}
         
-        <form method="POST" action="">
-            <div>
-                <label for="title">📖 Course Title:</label>
-                <input type="text" id="title" name="title" required placeholder="e.g., Introduction to Python">
+        <form method="POST" style="background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <div style="margin-bottom: 20px;">
+                <label for="title" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📖 Course Title</label>
+                <input type="text" id="title" name="title" required placeholder="e.g., Introduction to Python" 
+                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
             </div>
             
-            <div>
-                <label for="description">📝 Course Description:</label>
-                <textarea id="description" name="description" placeholder="Describe the course content and objectives..." style="height: 150px;"></textarea>
+            <div style="margin-bottom: 20px;">
+                <label for="description" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📝 Course Description</label>
+                <textarea id="description" name="description" placeholder="Describe the course content and objectives..." 
+                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; height: 120px; resize: vertical; box-sizing: border-box;"></textarea>
             </div>
             
-            <div style="margin-top: 25px;">
-                <input type="submit" value="Create Course" style="width: 100%; padding: 14px;">
+            <div style="margin-bottom: 20px;">
+                <input type="submit" value="Create Course" 
+                    style="width: 100%; padding: 12px; background: var(--accent-blue); color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: 600; cursor: pointer;">
             </div>
             
             <p style="text-align: center; margin-top: 20px; color: #666;">
-                <a href="{{ url_for('admin_dashboard') }}" style="color: #04AA6D; text-decoration: none; font-weight: 600;">← Back to Admin Dashboard</a>
+                <a href="{{ url_for('teacher_dashboard') }}" style="color: var(--accent-blue); text-decoration: none; font-weight: 600;">← Back to Dashboard</a>
             </p>
         </form>
     </div>
