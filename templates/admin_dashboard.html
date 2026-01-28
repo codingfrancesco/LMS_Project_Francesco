@@ -50,7 +50,11 @@
                                 <td style="padding: 15px;">{{ user.email }}</td>
                                 <td style="padding: 15px;">{{ user.full_name }}</td>
                                 <td style="padding: 15px;">
-                                    <span style="background: {% if user.role == 'teacher' %}#c8e6c9{% else %}#e3f2fd{% endif %}; color: {% if user.role == 'teacher' %}#2e7d32{% else %}#1565c0{% endif %}; padding: 5px 10px; border-radius: 4px; font-weight: 600;">{{ user.role }}</span>
+                                    {% if user.role == 'teacher' %}
+                                        <span style="background: #c8e6c9; color: #2e7d32; padding: 5px 10px; border-radius: 4px; font-weight: 600;">{{ user.role }}</span>
+                                    {% else %}
+                                        <span style="background: #e3f2fd; color: #1565c0; padding: 5px 10px; border-radius: 4px; font-weight: 600;">{{ user.role }}</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                         {% endfor %}

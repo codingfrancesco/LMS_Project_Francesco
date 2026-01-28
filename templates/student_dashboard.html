@@ -33,7 +33,7 @@
                             <div style="margin: 15px 0;">
                                 <small style="color: var(--medium-text);">Progress: {{ course.progress or 0 }}%</small>
                                 <div style="background-color: var(--bg-light); border-radius: 8px; height: 8px; margin-top: 5px; overflow: hidden;">
-                                    <div style="background-color: var(--accent-blue); height: 100%; width: {{ course.progress or 0 }}%; transition: width 0.3s ease;"></div>
+                                    <div style="background-color: var(--accent-blue); height: 100%; transition: width 0.3s ease; --progress: {{ course.progress or 0 }}%; width: calc(var(--progress));"></div>
                                 </div>
                             </div>
                             

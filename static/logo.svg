@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="40" height="40">
+  <!-- Shield background -->
+  <path d="M50 15 L80 30 L80 50 Q80 75 50 85 Q20 75 20 50 L20 30 Z" fill="#1a2f5a" stroke="#4a90e2" stroke-width="1.5"/>
+  
+  <!-- Book pages -->
+  <g transform="translate(35, 35)">
+    <!-- Left page -->
+    <rect x="0" y="0" width="8" height="14" fill="#4a90e2" rx="1"/>
+    <!-- Right page -->
+    <rect x="10" y="2" width="8" height="14" fill="#2d5a96" rx="1"/>
+    <!-- Lines on pages -->
+    <line x1="2" y1="4" x2="6" y2="4" stroke="#fff" stroke-width="0.8"/>
+    <line x1="2" y1="7" x2="6" y2="7" stroke="#fff" stroke-width="0.8"/>
+    <line x1="2" y1="10" x2="6" y2="10" stroke="#fff" stroke-width="0.8"/>
+    <line x1="12" y1="6" x2="16" y2="6" stroke="#fff" stroke-width="0.8"/>
+    <line x1="12" y1="9" x2="16" y2="9" stroke="#fff" stroke-width="0.8"/>
+  </g>
+  
+  <!-- Upward arrow -->
+  <g transform="translate(50, 25)">
+    <line x1="0" y1="10" x2="0" y2="0" stroke="#4a90e2" stroke-width="2" stroke-linecap="round"/>
+    <polyline points="-4,4 0,0 4,4" fill="none" stroke="#4a90e2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

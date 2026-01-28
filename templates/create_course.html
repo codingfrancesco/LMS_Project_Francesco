@@ -24,20 +24,51 @@
         
         <form method="POST" style="background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
             <div style="margin-bottom: 20px;">
-                <label for="title" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📖 Course Title</label>
+                <label for="title" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📖 Course Title *</label>
                 <input type="text" id="title" name="title" required placeholder="e.g., Introduction to Python" 
                     style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                <small style="color: #666; margin-top: 4px; display: block;">The name of your course (unique and descriptive)</small>
             </div>
             
             <div style="margin-bottom: 20px;">
-                <label for="description" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📝 Course Description</label>
-                <textarea id="description" name="description" placeholder="Describe the course content and objectives..." 
+                <label for="description" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📝 Course Description *</label>
+                <textarea id="description" name="description" required placeholder="Describe the course content, objectives, and what students will learn..." 
                     style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; height: 120px; resize: vertical; box-sizing: border-box;"></textarea>
+                <small style="color: #666; margin-top: 4px; display: block;">Clear description helps students decide to enroll</small>
             </div>
             
             <div style="margin-bottom: 20px;">
-                <input type="submit" value="Create Course" 
-                    style="width: 100%; padding: 12px; background: var(--accent-blue); color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: 600; cursor: pointer;">
+                <label for="course_type" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📚 Course Type</label>
+                <select id="course_type" name="course_type" 
+                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                    <option value="Self-Paced">Self-Paced</option>
+                    <option value="Instructor-Led">Instructor-Led</option>
+                    <option value="Hybrid">Hybrid</option>
+                    <option value="Workshop">Workshop</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label for="duration" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">⏱️ Duration</label>
+                <input type="text" id="duration" name="duration" placeholder="e.g., 4 weeks, 20 hours" 
+                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                <small style="color: #666; margin-top: 4px; display: block;">Estimated time to complete the course</small>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label for="level" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">🎯 Course Level</label>
+                <select id="level" name="level" 
+                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                    <option value="Expert">Expert</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <input type="submit" value="✓ Create Course" 
+                    style="width: 100%; padding: 12px; background: var(--accent-blue); color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s;">
             </div>
             
             <p style="text-align: center; margin-top: 20px; color: #666;">

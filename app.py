@@ -97,6 +97,12 @@ def init_db():
             title TEXT NOT NULL UNIQUE,
             -- Description of what the course covers
             description TEXT,
+            -- Type of course (Self-Paced, Instructor-Led, Hybrid, Workshop)
+            course_type TEXT DEFAULT 'Self-Paced',
+            -- Duration of the course (e.g., "4 weeks", "20 hours")
+            duration TEXT DEFAULT 'Flexible',
+            -- Difficulty level (Beginner, Intermediate, Advanced, Expert)
+            level TEXT DEFAULT 'Beginner',
             -- ID of the teacher who created this course
             teacher_id INTEGER,
             -- Timestamp when course was created
@@ -650,11 +656,18 @@ def create_course():
         # Extract form data from the course creation form
         title = request.form.get('title')
         description = request.form.get('description')
+        course_type = request.form.get('course_type', 'Self-Paced')
+        duration = request.form.get('duration', 'Flexible')
+        level = request.form.get('level', 'Beginner')
         
         # Validation: Check if course title is provided
         if not title:
             # Return error message if course title is empty
             return render_template('create_course.html', error='Course title is required!')
+        
+        if not description:
+            # Return error message if description is empty
+            return render_template('create_course.html', error='Course description is required!')
         
         try:
             # Establish connection to the database
@@ -662,11 +675,11 @@ def create_course():
             # Create cursor object to execute SQL commands
             cursor = conn.cursor()
             
-            # Execute SQL INSERT to add new course to database
+            # Execute SQL INSERT to add new course to database with all fields
             cursor.execute("""
-                INSERT INTO courses (title, description, teacher_id)
-                VALUES (?, ?, ?)
-            """, (title, description, session['user_id']))
+                INSERT INTO courses (title, description, course_type, duration, level, teacher_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (title, description, course_type, duration, level, session['user_id']))
             
             # Commit the changes to the database
             conn.commit()
@@ -992,39 +1005,51 @@ def lessons():
 def course():
     """
     Render the courses page with all available courses.
-    
-    Fetches all courses from the database.
+    Shows enrolled courses if student is logged in, otherwise shows all courses.
     
     Returns:
         Rendered HTML template with courses data
     """
+    enrolled_courses = []
+    all_courses = []
+    user_id = session.get('user_id')
+    user_role = session.get('role')
+    
     try:
-        # Try to fetch courses from database
-        # Establish connection to the database
         conn = get_db_connection()
-        # Create cursor object to execute SQL queries
         cursor = conn.cursor()
         
-        # Execute SQL query to fetch all courses
-        # SELECT id, title, description, course_id: Get course details
-        # FROM courses: Select from courses table
-        # ORDER BY id DESC: Sort by course ID in descending order (newest first)
+        # Get all courses
         cursor.execute("""
-            SELECT id, title, description, course_id 
-            FROM courses 
-            ORDER BY id DESC
+            SELECT c.id, c.title, c.description, c.course_id, u.full_name as teacher_name
+            FROM courses c
+            LEFT JOIN users u ON c.teacher_id = u.id
+            ORDER BY c.id DESC
         """)
-        # Fetch all results from the query and store in courses_data list
-        courses_data = cursor.fetchall()
-        # Close the database connection to free resources
+        all_courses = cursor.fetchall()
+        
+        # If student is logged in, get their enrolled courses
+        if user_id and user_role == 'student':
+            cursor.execute("""
+                SELECT c.id, c.title, c.description, c.course_id, u.full_name as teacher_name, 
+                       e.progress, e.enrolled_at
+                FROM courses c
+                LEFT JOIN users u ON c.teacher_id = u.id
+                LEFT JOIN enrollments e ON c.id = e.course_id
+                WHERE e.student_id = ? AND e.student_id IS NOT NULL
+                ORDER BY c.id DESC
+            """, (user_id,))
+            enrolled_courses = cursor.fetchall()
+        
         conn.close()
     except sqlite3.OperationalError:
-        # If courses table doesn't exist, return empty list
-        courses_data = []
+        pass
     
-    # Render course.html template and pass courses data as variable
-    # The template can loop through this data with {% for course in courses %}
-    return render_template('course.html', courses=courses_data)
+    return render_template('course.html', 
+                         all_courses=all_courses,
+                         enrolled_courses=enrolled_courses,
+                         is_logged_in=user_id is not None,
+                         is_student=user_role == 'student')
 
 
 # Define route for assignments page
