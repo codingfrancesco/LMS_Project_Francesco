@@ -37,7 +37,24 @@
                         <li class="nav-item">
                             <a href="{{ url_for('create_course') }}" class="nav-link" style="color: #4a90e2; font-weight: 600;">➕ Add Course</a>
                         </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('teacher_dashboard') }}#create-assignment" class="nav-link" style="color: #ffd166; font-weight: 600;">➕ Create Assignment</a>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a href="{{ url_for('my_assignments') }}" class="nav-link" style="color: #4a90e2; font-weight: 600;">📋 My Assignments</a>
+                        </li>
                     {% endif %}
+                    
+                    <li class="nav-item">
+                        <a href="{{ url_for('notifications') }}" class="nav-link" style="position: relative; display: flex; align-items: center; gap: 5px;">
+                            🔔 Notifications
+                            {% if session.get('role') == 'student' %}
+                                <!-- Placeholder for unread count - will be populated by JavaScript or inline Python -->
+                                <span id="unread-badge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; margin-left: 3px;"></span>
+                            {% endif %}
+                        </a>
+                    </li>
                     <li class="nav-item" style="margin-left: auto;">
                         <span class="nav-link" style="cursor: default; font-weight: 600;">
                             {% if session.get('role') == 'teacher' %}

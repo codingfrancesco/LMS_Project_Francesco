@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Lesson{% endblock %}
+
+{% block content %}
+    <div style="max-width: 600px; margin: 40px auto;">
+        <h1>✏️ Edit Lesson</h1>
+        <p>Update the lesson content for <strong>{{ lesson.title }}</strong></p>
+        
+        {% if error %}
+        <div style="background: #ffe6e6; border-left: 4px solid #d32f2f; padding: 15px; border-radius: 8px; margin-bottom: 20px; color: #c62828;">
+            <strong>⚠️ Error:</strong> {{ error }}
+        </div>
+        {% endif %}
+        
+        {% if success %}
+        <div style="background: #e6ffe6; border-left: 4px solid #2e7d32; padding: 15px; border-radius: 8px; margin-bottom: 20px; color: #1b5e20;">
+            <strong>✓ Success:</strong> {{ success }}
+        </div>
+        {% endif %}
+        
+        <form method="POST" style="background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <div style="margin-bottom: 20px;">
+                <label for="title" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📖 Lesson Title:</label>
+                <input type="text" id="title" name="title" required placeholder="e.g., Variables and Data Types" value="{{ lesson.title or '' }}" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label for="subtitle" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📝 Lesson Subtitle:</label>
+                <input type="text" id="subtitle" name="subtitle" placeholder="e.g., Understanding variables in Python" value="{{ lesson.subtitle or '' }}" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label for="content" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📚 Lesson Content:</label>
+                <p style="color: var(--light-text); font-size: 12px; margin: 0 0 10px 0;">
+                    💡 Tip: You can use line breaks to format your content. The lesson will display line breaks as they appear.
+                </p>
+                <textarea id="content" name="content" placeholder="Enter the lesson content here..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; height: 300px; resize: vertical; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">{{ lesson.content or '' }}</textarea>
+            </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <input type="submit" value="Update Lesson" style="flex: 1; padding: 12px; background: var(--accent-blue); color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.3s ease;" onmouseover="this.style.background='#3a7bc8';" onmouseout="this.style.background='var(--accent-blue)';">
+                <a href="{{ url_for('manage_course', course_id=lesson.course_id) }}" style="flex: 1; padding: 12px; background: #666; color: white; text-align: center; border-radius: 4px; text-decoration: none; font-weight: 600; transition: background 0.3s ease;" onmouseover="this.style.background='#555';" onmouseout="this.style.background='#666';">Cancel</a>
+            </div>
+            
+            <p style="text-align: center; margin-top: 20px; color: #666;">
+                <a href="{{ url_for('teacher_dashboard') }}" style="color: var(--accent-blue); text-decoration: none; font-weight: 600;">← Back to Dashboard</a>
+            </p>
+        </form>
+    </div>
+{% endblock %}

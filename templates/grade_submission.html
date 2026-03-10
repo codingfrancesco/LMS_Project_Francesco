@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Grade Student - {{ assignment.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <!-- Student Information Card -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h3 class="mb-0">Grading Submission</h3>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>Student Information</h5>
+                    <p><strong>Name:</strong> {{ student.full_name }}</p>
+                    <p><strong>Username:</strong> {{ student.username }}</p>
+                    <p><strong>Email:</strong> {{ student.email }}</p>
+                </div>
+                <div class="col-md-6">
+                    <h5>Assignment Information</h5>
+                    <p><strong>Assignment:</strong> {{ assignment.title }}</p>
+                    <p><strong>Description:</strong> {{ assignment.description }}</p>
+                    <p><strong>Deadline:</strong> {{ assignment.deadline }}</p>
+                </div>
+            </div>
+        </div>
+    </card>
+
+    <!-- Grading Form Card -->
+    <div class="card">
+        <div class="card-header">
+            <h4 class="mb-0">
+                {% if existing_grade %}
+                    Update Grade
+                {% else %}
+                    Assign Grade
+                {% endif %}
+            </h4>
+        </div>
+        <div class="card-body">
+            {% if error %}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <strong>Error:</strong> {{ error }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endif %}
+
+            <form method="POST" action="{{ url_for('submit_grade', assignment_id=assignment.id, student_id=student.id) }}">
+                <div class="mb-4">
+                    <label for="grade" class="form-label">
+                        <strong>Grade (0-100)</strong>
+                    </label>
+                    <div class="input-group">
+                        <input type="number" 
+                               class="form-control form-control-lg" 
+                               id="grade" 
+                               name="grade" 
+                               min="0" 
+                               max="100" 
+                               step="0.5"
+                               placeholder="Enter grade between 0 and 100"
+                               value="{% if existing_grade %}{{ existing_grade.grade }}{% endif %}"
+                               required>
+                        <span class="input-group-text">/100</span>
+                    </div>
+                    <small class="form-text text-muted d-block mt-2">
+                        Enter a numerical grade or score between 0 and 100
+                    </small>
+
+                    <!-- Grade Preview -->
+                    <div class="mt-3" id="gradePreview" style="display:none;">
+                        <div class="progress" style="height: 30px;">
+                            <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%">
+                                <span id="progressText" style="color: white; font-weight: bold;"></span>
+                            </div>
+                        </div>
+                        <p class="mt-2">
+                            Performance: <span id="performanceText"></span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="feedback" class="form-label">
+                        <strong>Feedback & Comments</strong>
+                    </label>
+                    <textarea class="form-control" 
+                              id="feedback" 
+                              name="feedback" 
+                              rows="6"
+                              placeholder="Provide constructive feedback to help the student improve...">{% if existing_grade %}{{ existing_grade.feedback }}{% endif %}</textarea>
+                    <small class="form-text text-muted d-block mt-2">
+                        Share specific comments about the student's performance, areas to improve, and strengths
+                    </small>
+                </div>
+
+                <!-- Previous Grade Info (if exists) -->
+                {% if existing_grade %}
+                    <div class="alert alert-info" role="alert">
+                        <h6>Previous Grade Information</h6>
+                        <p><strong>Previous Grade:</strong> {{ existing_grade.grade }}/100</p>
+                        <p><strong>Graded On:</strong> {{ existing_grade.graded_at }}</p>
+                        {% if existing_grade.updated_at %}
+                            <p><strong>Last Updated:</strong> {{ existing_grade.updated_at }}</p>
+                        {% endif %}
+                    </div>
+                {% endif %}
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success btn-lg">
+                        {% if existing_grade %}
+                            Update Grade
+                        {% else %}
+                            Submit Grade
+                        {% endif %}
+                    </button>
+                    <a href="{{ url_for('grade_assignment', assignment_id=assignment.id) }}" 
+                       class="btn btn-secondary btn-lg">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Real-time grade preview
+    const gradeInput = document.getElementById('grade');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const performanceText = document.getElementById('performanceText');
+    const gradePreview = document.getElementById('gradePreview');
+
+    gradeInput.addEventListener('input', function() {
+        const grade = parseFloat(this.value);
+        
+        if (!isNaN(grade) && grade >= 0 && grade <= 100) {
+            gradePreview.style.display = 'block';
+            progressBar.style.width = grade + '%';
+            progressText.textContent = grade + '/100';
+            
+            // Determine color and performance text
+            if (grade >= 80) {
+                progressBar.className = 'progress-bar bg-success';
+                performanceText.innerHTML = '<strong>Excellent!</strong> 🌟';
+            } else if (grade >= 60) {
+                progressBar.className = 'progress-bar bg-warning';
+                performanceText.innerHTML = '<strong>Good</strong> 👍';
+            } else if (grade >= 40) {
+                progressBar.className = 'progress-bar bg-info';
+                performanceText.innerHTML = '<strong>Fair</strong> - Room for improvement';
+            } else {
+                progressBar.className = 'progress-bar bg-danger';
+                performanceText.innerHTML = '<strong>Needs Improvement</strong>';
+            }
+        } else {
+            gradePreview.style.display = 'none';
+        }
+    });
+
+    // Trigger preview on page load if grade exists
+    if (gradeInput.value) {
+        gradeInput.dispatchEvent(new Event('input'));
+    }
+</script>
+
+<style>
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+
+    .form-control:focus, 
+    .form-control-lg:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    }
+
+    .input-group-text {
+        font-weight: bold;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}Attendance Report - {{ course.title }}{% endblock %}
+
+{% block content %}
+    <h1>📋 Attendance Report</h1>
+    <p>Course: <strong>{{ course.title }}</strong></p>
+    
+    <div style="margin: 20px 0;">
+        <a href="{{ url_for('manage_course', course_id=course.id) }}" class="btn btn-outline">← Back to Course</a>
+    </div>
+    
+    <!-- Summary Statistics -->
+    <div class="grid" style="margin-bottom: 30px;">
+        <div class="card" style="text-align: center; border-top: 5px solid #28a745;">
+            <div class="card-header">✓ Total Students</div>
+            <div class="card-body">
+                <h2 style="color: #28a745; font-size: 36px; margin: 0;">{{ students|length }}</h2>
+            </div>
+        </div>
+        
+        <div class="card" style="text-align: center; border-top: 5px solid var(--accent-blue);">
+            <div class="card-header">📚 Total Lessons</div>
+            <div class="card-body">
+                <h2 style="color: var(--accent-blue); font-size: 36px; margin: 0;">{{ lessons|length }}</h2>
+            </div>
+        </div>
+        
+        <div class="card" style="text-align: center; border-top: 5px solid #ffc107;">
+            <div class="card-header">📊 Records</div>
+            <div class="card-body">
+                <h2 style="color: #ffc107; font-size: 36px; margin: 0;">{{ attendance_data|length }}</h2>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Attendance Table -->
+    <div class="card" style="overflow-x: auto;">
+        <div class="card-header">📋 Attendance Details</div>
+        <div class="card-body" style="padding: 0;">
+            {% if students and lessons %}
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: var(--bg-light); border-bottom: 2px solid var(--border-color);">
+                            <th style="padding: 15px; text-align: left; font-weight: 600; color: var(--dark-text); border-right: 1px solid var(--border-color);">Student Name</th>
+                            {% for lesson in lessons %}
+                                <th style="padding: 15px; text-align: center; font-weight: 600; color: var(--dark-text); border-right: 1px solid var(--border-color); min-width: 80px;">
+                                    <small>{{ lesson.title[:15] }}{% if lesson.title|length > 15 %}...{% endif %}</small>
+                                </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                            <tr style="border-bottom: 1px solid var(--border-color); transition: background 0.2s ease;" onmouseover="this.style.background='var(--bg-light)';" onmouseout="this.style.background='white';">
+                                <td style="padding: 15px; text-align: left; font-weight: 600; color: var(--dark-text); border-right: 1px solid var(--border-color);">
+                                    {{ student.full_name }}
+                                </td>
+                                {% for lesson in lessons %}
+                                    <td style="padding: 15px; text-align: center; border-right: 1px solid var(--border-color);">
+                                        {% set status = attendance_data.get((student.id, lesson.id)) %}
+                                        {% if status == 'present' %}
+                                            <span style="background: #d4edda; color: #28a745; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 12px;">✓ Present</span>
+                                        {% elif status == 'late' %}
+                                            <span style="background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 12px;">⏰ Late</span>
+                                        {% elif status == 'absent' %}
+                                            <span style="background: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 12px;">✗ Absent</span>
+                                        {% else %}
+                                            <span style="color: var(--light-text); font-size: 12px;">-</span>
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div style="padding: 40px; text-align: center; color: var(--light-text);">
+                    {% if not students %}
+                        <p>No students enrolled in this course yet.</p>
+                    {% endif %}
+                    {% if not lessons %}
+                        <p>No lessons created in this course yet.</p>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Student Summary -->
+    <div style="margin-top: 30px;">
+        <h2 style="color: var(--primary-navy); margin-top: 0;">📊 Student Summary</h2>
+        <div class="grid">
+            {% for student in students %}
+                {% set present_count = 0 %}
+                {% set late_count = 0 %}
+                {% set absent_count = 0 %}
+                {% for lesson in lessons %}
+                    {% set status = attendance_data.get((student.id, lesson.id)) %}
+                    {% if status == 'present' %}
+                        {% set present_count = present_count + 1 %}
+                    {% elif status == 'late' %}
+                        {% set late_count = late_count + 1 %}
+                    {% elif status == 'absent' %}
+                        {% set absent_count = absent_count + 1 %}
+                    {% endif %}
+                {% endfor %}
+                
+                <div class="card" style="border-left: 5px solid var(--accent-blue);">
+                    <div class="card-header">{{ student.full_name }}</div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                            <div style="text-align: center;">
+                                <p style="margin: 0 0 5px 0; color: var(--light-text); font-size: 12px;">Present</p>
+                                <p style="margin: 0; color: #28a745; font-weight: bold; font-size: 20px;">{{ present_count }}</p>
+                            </div>
+                            <div style="text-align: center;">
+                                <p style="margin: 0 0 5px 0; color: var(--light-text); font-size: 12px;">Late</p>
+                                <p style="margin: 0; color: #ffc107; font-weight: bold; font-size: 20px;">{{ late_count }}</p>
+                            </div>
+                            <div style="text-align: center;">
+                                <p style="margin: 0 0 5px 0; color: var(--light-text); font-size: 12px;">Absent</p>
+                                <p style="margin: 0; color: #dc3545; font-weight: bold; font-size: 20px;">{{ absent_count }}</p>
+                            </div>
+                        </div>
+                        {% set total_attended = present_count + late_count %}
+                        {% set attendance_percent = (total_attended / lessons|length * 100) if lessons|length > 0 else 0 %}
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color); text-align: center;">
+                            <p style="margin: 0 0 5px 0; color: var(--light-text); font-size: 12px;">Attendance Rate</p>
+                            <p style="margin: 0; color: var(--accent-blue); font-weight: bold; font-size: 18px;">{{ "%.0f"|format(attendance_percent) }}%</p>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Legend -->
+    <div style="margin-top: 30px; background: #f0f8ff; border: 2px solid var(--accent-blue); padding: 20px; border-radius: 8px;">
+        <h3 style="color: var(--primary-navy); margin-top: 0;">📚 Legend</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <div>
+                <span style="background: #d4edda; color: #28a745; padding: 4px 8px; border-radius: 4px; font-weight: 600;">✓ Present</span>
+                <p style="margin: 5px 0 0 0; color: var(--light-text); font-size: 12px;">Attended the full class</p>
+            </div>
+            <div>
+                <span style="background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px; font-weight: 600;">⏰ Late</span>
+                <p style="margin: 5px 0 0 0; color: var(--light-text); font-size: 12px;">Attended but arrived late</p>
+            </div>
+            <div>
+                <span style="background: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-weight: 600;">✗ Absent</span>
+                <p style="margin: 5px 0 0 0; color: var(--light-text); font-size: 12px;">Did not attend</p>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -21,6 +21,20 @@
         
         <form method="POST" style="background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
             <div style="margin-bottom: 20px;">
+                <label for="topic_id" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📚 Topic / Lesson:</label>
+                <select id="topic_id" name="topic_id" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                    <option value="">-- Select topic --</option>
+                        {% for t in topics %}
+                            <option value="{{ t.id }}" {% if selected_topic_id and t.id == selected_topic_id %}selected{% endif %}>{{ t.title }}</option>
+                        {% endfor %}
+                </select>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <p style="margin:0 0 8px 0; font-weight:600; color:#333;">Or create a new topic:</p>
+                <input type="text" id="new_topic_title" name="new_topic_title" placeholder="New topic title (optional)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; margin-bottom:8px;">
+                <input type="text" id="new_topic_subtitle" name="new_topic_subtitle" placeholder="New topic subtitle / description (optional)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div style="margin-bottom: 20px;">
                 <label for="question" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">❓ Question:</label>
                 <textarea id="question" name="question" required placeholder="Enter the assignment question..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; height: 100px; box-sizing: border-box;"></textarea>
             </div>
@@ -49,10 +63,10 @@
                 <label for="correct_answer" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">✅ Correct Answer:</label>
                 <select id="correct_answer" name="correct_answer" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
                     <option value="">-- Select correct answer --</option>
-                    <option value="A">A) Option A</option>
-                    <option value="B">B) Option B</option>
-                    <option value="C">C) Option C</option>
-                    <option value="D">D) Option D</option>
+                        <option value="a">A) Option A</option>
+                        <option value="b">B) Option B</option>
+                        <option value="c">C) Option C</option>
+                        <option value="d">D) Option D</option>
                 </select>
             </div>
             

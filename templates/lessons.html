@@ -36,9 +36,9 @@
                             Expand your knowledge with this comprehensive lesson covering key concepts and practical applications.
                         </p>
                         
-                        <button class="btn btn-primary" style="width: 100%; margin-top: 10px;">
+                        <a href="{{ url_for('view_lesson', lesson_id=lesson.id) }}" class="btn btn-primary" style="width: 100%; margin-top: 10px; text-align: center; display: inline-block;">
                             ▶️ Start Lesson
-                        </button>
+                        </a>
                     </div>
                 </div>
             {% endfor %}

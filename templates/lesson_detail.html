@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ lesson.title }}{% endblock %}
+
+{% block content %}
+    <!-- Breadcrumb Navigation -->
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px; color: var(--light-text); font-size: 14px;">
+        <a href="{{ url_for('home') }}" style="color: var(--accent-blue); text-decoration: none;">Home</a>
+        <span>›</span>
+        <a href="{{ url_for('lessons') }}" style="color: var(--accent-blue); text-decoration: none;">Lessons</a>
+        <span>›</span>
+        <span>{{ lesson.title }}</span>
+    </div>
+    
+    <!-- Lesson Header -->
+    <div style="background: linear-gradient(135deg, var(--primary-navy), var(--primary-blue)); color: white; padding: 40px; border-radius: 12px; margin-bottom: 30px;">
+        <h1 style="margin: 0 0 10px 0; font-size: 36px;">{{ lesson.title }}</h1>
+        {% if lesson.subtitle %}
+            <p style="margin: 0 0 15px 0; font-size: 16px; opacity: 0.95;">{{ lesson.subtitle }}</p>
+        {% endif %}
+        {% if lesson.course_title %}
+            <div style="display: inline-block; background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 6px; font-size: 14px;">
+                📚 {{ lesson.course_title }}
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Main Content Area -->
+    <div style="display: grid; grid-template-columns: 1fr 300px; gap: 30px;">
+        <!-- Lesson Content -->
+        <div>
+            <!-- Lesson Description/Content -->
+            <div class="card" style="margin-bottom: 30px;">
+                <div class="card-header">📖 Lesson Content</div>
+                <div class="card-body">
+                    <div style="color: var(--dark-text); line-height: 1.8; font-size: 15px;">
+                        {% if lesson.content %}
+                            {{ lesson.content | replace('\n', '<br>') | safe }}
+                        {% else %}
+                            <p><strong>Topic:</strong> {{ lesson.title }}</p>
+                            {% if lesson.subtitle %}
+                                <p><strong>Description:</strong> {{ lesson.subtitle }}</p>
+                            {% endif %}
+                            <p style="color: var(--medium-text); font-style: italic;">No detailed content available yet. Check back soon for the full lesson!</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Practice Questions Section -->
+            {% if questions %}
+                <div class="card">
+                    <div class="card-header">✏️ Practice Questions ({{ questions | length }})</div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('submit_assignment') }}" id="lessonQuizForm">
+                            <div style="display: grid; gap: 30px;">
+                                {% for question in questions %}
+                                    <div style="border-left: 5px solid var(--accent-blue); padding: 20px; background: var(--bg-light); border-radius: 8px;">
+                                        <h4 style="margin-top: 0; color: var(--dark-text);">Question {{ loop.index }} of {{ questions | length }}</h4>
+                                        <p style="font-size: 16px; font-weight: 600; color: var(--dark-text); margin-bottom: 20px;">
+                                            {{ question.question }}
+                                        </p>
+                                        
+                                        <div style="display: grid; gap: 12px;">
+                                            <label style="display: flex; align-items: center; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.3s ease; background: white;">
+                                                <input type="radio" name="question_{{ question.id }}" value="A" style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;">
+                                                <span><strong>A)</strong> {{ question.option_a }}</span>
+                                            </label>
+                                            
+                                            <label style="display: flex; align-items: center; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.3s ease; background: white;">
+                                                <input type="radio" name="question_{{ question.id }}" value="B" style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;">
+                                                <span><strong>B)</strong> {{ question.option_b }}</span>
+                                            </label>
+                                            
+                                            <label style="display: flex; align-items: center; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.3s ease; background: white;">
+                                                <input type="radio" name="question_{{ question.id }}" value="C" style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;">
+                                                <span><strong>C)</strong> {{ question.option_c }}</span>
+                                            </label>
+                                            
+                                            <label style="display: flex; align-items: center; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.3s ease; background: white;">
+                                                <input type="radio" name="question_{{ question.id }}" value="D" style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;">
+                                                <span><strong>D)</strong> {{ question.option_d }}</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px; margin-top: 40px; justify-content: center;">
+                                <button type="submit" class="btn btn-primary" style="padding: 14px 40px; font-size: 16px;">
+                                    ✓ Submit Answers
+                                </button>
+                                <button type="reset" class="btn btn-outline" style="padding: 14px 40px; font-size: 16px;">
+                                    🔄 Clear Answers
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            {% else %}
+                <div style="background: #f0f8ff; border: 2px solid var(--accent-blue); padding: 30px; border-radius: 8px; text-align: center;">
+                    <p style="color: var(--medium-text); margin: 0;">
+                        No practice questions available yet. Check back soon!
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+        
+        <!-- Sidebar -->
+        <div>
+            <!-- Lesson Info Card -->
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="card-header">📋 Lesson Info</div>
+                <div class="card-body">
+                    <div style="display: grid; gap: 15px;">
+                        <div>
+                            <p style="color: var(--light-text); font-size: 12px; margin: 0 0 5px 0; font-weight: 600;">COURSE</p>
+                            <p style="color: var(--dark-text); margin: 0;">{{ lesson.course_title or 'General' }}</p>
+                        </div>
+                        <div>
+                            <p style="color: var(--light-text); font-size: 12px; margin: 0 0 5px 0; font-weight: 600;">DIFFICULTY</p>
+                            <p style="color: var(--dark-text); margin: 0;">Intermediate</p>
+                        </div>
+                        <div>
+                            <p style="color: var(--light-text); font-size: 12px; margin: 0 0 5px 0; font-weight: 600;">ESTIMATED TIME</p>
+                            <p style="color: var(--dark-text); margin: 0;">30-45 minutes</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Learning Progress Card -->
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="card-header">📊 Progress</div>
+                <div class="card-body" style="text-align: center;">
+                    <div style="font-size: 28px; color: var(--accent-blue); font-weight: bold; margin-bottom: 10px;">0%</div>
+                    <p style="color: var(--light-text); font-size: 12px; margin: 0;">Not yet started</p>
+                </div>
+            </div>
+            
+            <!-- Navigation Card -->
+            <div class="card">
+                <div class="card-header">🔗 Quick Links</div>
+                <div class="card-body">
+                    <div style="display: grid; gap: 10px;">
+                        <a href="{{ url_for('lessons') }}" style="display: block; padding: 10px; background: var(--bg-light); border-radius: 6px; text-align: center; color: var(--accent-blue); text-decoration: none; font-size: 13px; font-weight: 600; transition: all 0.3s ease;" onmouseover="this.style.background='var(--accent-blue)'; this.style.color='white';" onmouseout="this.style.background='var(--bg-light)'; this.style.color='var(--accent-blue)';">
+                            ← All Lessons
+                        </a>
+                        <a href="{{ url_for('assignments') }}" style="display: block; padding: 10px; background: var(--bg-light); border-radius: 6px; text-align: center; color: var(--accent-blue); text-decoration: none; font-size: 13px; font-weight: 600; transition: all 0.3s ease;" onmouseover="this.style.background='var(--accent-blue)'; this.style.color='white';" onmouseout="this.style.background='var(--bg-light)'; this.style.color='var(--accent-blue)';">
+                            📝 Practice Quiz
+                        </a>
+                        <a href="{{ url_for('course') }}" style="display: block; padding: 10px; background: var(--bg-light); border-radius: 6px; text-align: center; color: var(--accent-blue); text-decoration: none; font-size: 13px; font-weight: 600; transition: all 0.3s ease;" onmouseover="this.style.background='var(--accent-blue)'; this.style.color='white';" onmouseout="this.style.background='var(--bg-light)'; this.style.color='var(--accent-blue)';">
+                            📚 Courses
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Radio button styling
+        document.querySelectorAll('input[type="radio"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const questionName = this.name;
+                document.querySelectorAll(`input[name="${questionName}"]`).forEach(r => {
+                    r.parentElement.style.borderColor = 'var(--border-color)';
+                    r.parentElement.style.background = 'white';
+                });
+                this.parentElement.style.borderColor = 'var(--accent-blue)';
+                this.parentElement.style.background = '#e3f2fd';
+            });
+        });
+        
+        // Form submission with validation
+        document.getElementById('lessonQuizForm').addEventListener('submit', function(e) {
+            const questions = new Set();
+            document.querySelectorAll('input[type="radio"]').forEach(radio => {
+                questions.add(radio.name);
+            });
+            
+            let answered = 0;
+            questions.forEach(question => {
+                if (document.querySelector(`input[name="${question}"]:checked`)) {
+                    answered++;
+                }
+            });
+            
+            if (answered < questions.size) {
+                e.preventDefault();
+                alert(`Please answer all questions. You've answered ${answered} out of ${questions.size} questions.`);
+            } else {
+                alert('Thank you for completing this lesson quiz! Your answers have been submitted.');
+            }
+        });
+    </script>
+{% endblock %}

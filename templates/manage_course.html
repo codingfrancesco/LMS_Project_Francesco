@@ -6,9 +6,10 @@
     <h1>📚 {{ course.title }}</h1>
     <p>{{ course.description }}</p>
     
-    <div style="margin: 30px 0; display: flex; gap: 10px;">
+    <div style="margin: 30px 0; display: flex; gap: 10px; flex-wrap: wrap;">
         <a href="{{ url_for('create_lesson', course_id=course.id) }}" class="btn btn-primary">➕ Add Lesson</a>
         <a href="{{ url_for('create_assignment', course_id=course.id) }}" class="btn btn-secondary">➕ Add Assignment</a>
+        <a href="{{ url_for('view_attendance', course_id=course.id) }}" class="btn btn-secondary">📋 View Attendance</a>
         <a href="{{ url_for('teacher_dashboard') }}" class="btn btn-outline">← Back</a>
     </div>
     
@@ -20,7 +21,20 @@
                     <div class="card">
                         <div class="card-header">{{ lesson.title }}</div>
                         <div class="card-body">
-                            <p>{{ lesson.subtitle[:100] }}{% if lesson.subtitle|length > 100 %}...{% endif %}</p>
+                            <p style="color: var(--medium-text); margin: 0 0 15px 0;">{{ lesson.subtitle[:100] }}{% if lesson.subtitle|length > 100 %}...{% endif %}</p>
+                            {% if lesson.content %}
+                                <p style="color: var(--light-text); font-size: 12px; margin: 0 0 15px 0;">📄 Has content</p>
+                            {% else %}
+                                <p style="color: var(--light-text); font-size: 12px; margin: 0 0 15px 0; font-style: italic;">⚠️ No content yet</p>
+                            {% endif %}
+                            <div style="display: flex; gap: 10px;">
+                                <a href="{{ url_for('edit_lesson', lesson_id=lesson.id) }}" class="btn btn-secondary" style="flex: 1; text-align: center; font-size: 13px;">✏️ Edit</a>
+                                <a href="{{ url_for('view_lesson', lesson_id=lesson.id) }}" class="btn btn-outline" style="flex: 1; text-align: center; font-size: 13px;">👁️ View</a>
+                                <a href="{{ url_for('mark_attendance', lesson_id=lesson.id) }}" class="btn btn-secondary" style="flex: 1; text-align: center; font-size: 13px;">📍 Attendance</a>
+                                <form method="POST" action="{{ url_for('delete_lesson', lesson_id=lesson.id) }}" style="flex: 1;">
+                                    <button type="submit" onclick="return confirm('Are you sure you want to delete this lesson and all its assignments?')" class="btn btn-outline" style="width: 100%; text-align: center; font-size: 13px; background: #fee; color: #c33; border-color: #f88;">🗑️ Delete</button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 {% endfor %}
@@ -30,21 +44,56 @@
         {% endif %}
     </div>
     
+    <!-- New Section: Assignment Submissions for Grading -->
     <div class="section mt-30">
-        <h2 class="section-title">✓ Assignments ({{ assignments|length }})</h2>
+        <h2 class="section-title">✅ Assignments to Grade ({{ assignments|length }})</h2>
         {% if assignments %}
-            <div class="grid">
+            <div style="display: grid; gap: 15px;">
                 {% for assignment in assignments %}
-                    <div class="card">
-                        <div class="card-header">{{ assignment.question }}</div>
-                        <div class="card-body">
-                            <p>Correct Answer: <strong>{{ assignment.correct_answer }}</strong></p>
+                    <div class="card" style="border-left: 5px solid var(--accent-blue); padding: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="flex: 1;">
+                                <h4 style="margin: 0 0 8px 0;">{{ assignment.title }}</h4>
+                                <p style="margin: 0 0 8px 0; color: var(--medium-text);">{{ assignment.description }}</p>
+                                <p style="margin: 0; color: var(--light-text); font-size: 12px;">📅 Deadline: {{ assignment.deadline }}</p>
+                            </div>
+                            <div style="text-align: right; min-width: 150px;">
+                                <div style="background: #f0f0f0; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
+                                    <p style="margin: 0 0 4px 0; color: var(--light-text); font-size: 12px;">Grading Progress</p>
+                                    <p style="margin: 0; font-size: 18px; font-weight: bold;">{{ assignment.graded_count }}/{{ assignment.total_students }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 12px;">
+                            <a href="{{ url_for('grade_assignment', assignment_id=assignment.id) }}" class="btn btn-primary" style="flex: 1; text-align: center;">📊 Grade {{ assignment.graded_count }}/{{ assignment.total_students }} Students</a>
                         </div>
                     </div>
                 {% endfor %}
             </div>
         {% else %}
             <p class="text-muted">No assignments yet. <a href="{{ url_for('create_assignment', course_id=course.id) }}" style="color: var(--accent-blue); font-weight: 600;">Create one</a></p>
+        {% endif %}
+    </div>
+    
+    <div class="section mt-30">
+        <h2 class="section-title">✓ Questions ({{ questions|length }})</h2>
+        {% if questions %}
+            <div style="display: grid; gap: 15px;">
+                {% for question in questions %}
+                    <div class="card" style="border-left: 5px solid var(--accent-blue);">
+                        <div class="card-header">{{ question.question[:80] }}{% if question.question|length > 80 %}...{% endif %}</div>
+                        <div class="card-body">
+                            <div style="display: flex; gap: 10px;">
+                                <form method="POST" action="{{ url_for('delete_assignment', assignment_id=question.id) }}" style="flex: 1;">
+                                    <button type="submit" onclick="return confirm('Are you sure you want to delete this question?')" class="btn btn-outline" style="width: 100%; text-align: center; font-size: 13px; background: #fee; color: #c33; border-color: #f88;">🗑️ Delete</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-muted">No questions yet. <a href="{{ url_for('create_assignment', course_id=course.id) }}" style="color: var(--accent-blue); font-weight: 600;">Create one</a></p>
         {% endif %}
     </div>
 {% endblock %}

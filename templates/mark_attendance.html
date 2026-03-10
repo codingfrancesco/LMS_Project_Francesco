@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}Mark Attendance{% endblock %}
+
+{% block content %}
+    <div style="max-width: 800px; margin: 40px auto;">
+        <h1>📍 Mark Attendance</h1>
+        <p>Mark attendance for lesson: <strong>{{ lesson.title }}</strong></p>
+        
+        <form method="POST" style="background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 20px;">
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: var(--primary-navy); margin-top: 0;">📚 Students ({{ students|length }})</h3>
+                <p style="color: var(--light-text); font-size: 13px;">Select attendance status for each student</p>
+            </div>
+            
+            {% if students %}
+                <div style="display: grid; gap: 12px; margin-bottom: 30px;">
+                    {% for student in students %}
+                        <div style="padding: 15px; background: var(--bg-light); border-radius: 8px; border-left: 4px solid var(--accent-blue);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 20px;">
+                                <div>
+                                    <p style="margin: 0; font-weight: 600; color: var(--dark-text);">
+                                        {{ student.full_name }}
+                                    </p>
+                                    <p style="margin: 5px 0 0 0; color: var(--light-text); font-size: 12px;">
+                                        ID: {{ student.id }}
+                                    </p>
+                                </div>
+                                
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="radio" name="attendance_{{ student.id }}" value="present" 
+                                               {% if attendance_records.get(student.id) == 'present' %}checked{% endif %}
+                                               style="width: 18px; height: 18px; cursor: pointer;">
+                                        <span style="color: #28a745; font-weight: 600;">✓ Present</span>
+                                    </label>
+                                    
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="radio" name="attendance_{{ student.id }}" value="late"
+                                               {% if attendance_records.get(student.id) == 'late' %}checked{% endif %}
+                                               style="width: 18px; height: 18px; cursor: pointer;">
+                                        <span style="color: #ffc107; font-weight: 600;">⏰ Late</span>
+                                    </label>
+                                    
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="radio" name="attendance_{{ student.id }}" value="absent"
+                                               {% if attendance_records.get(student.id) == 'absent' or not attendance_records.get(student.id) %}checked{% endif %}
+                                               style="width: 18px; height: 18px; cursor: pointer;">
+                                        <span style="color: #dc3545; font-weight: 600;">✗ Absent</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div style="background: #fee; border: 2px solid #f88; color: #c33; padding: 20px; border-radius: 8px; text-align: center;">
+                    <p style="margin: 0;">No students enrolled in this course yet.</p>
+                </div>
+            {% endif %}
+            
+            <div style="display: flex; gap: 10px; margin-top: 30px;">
+                <button type="submit" class="btn btn-primary" style="flex: 1; padding: 12px; font-size: 16px;">
+                    ✓ Save Attendance
+                </button>
+                <a href="{{ url_for('manage_course', course_id=lesson.course_id) }}" class="btn btn-outline" style="flex: 1; padding: 12px; text-align: center; font-size: 16px; text-decoration: none;">
+                    ← Cancel
+                </a>
+            </div>
+        </form>
+        
+        <!-- Info Box -->
+        <div style="margin-top: 30px; background: #f0f8ff; border: 2px solid var(--accent-blue); padding: 20px; border-radius: 8px;">
+            <h4 style="color: var(--primary-navy); margin-top: 0;">ℹ️ Attendance Tracking</h4>
+            <ul style="margin: 0; padding-left: 20px; color: var(--medium-text); font-size: 14px; line-height: 1.8;">
+                <li><span style="color: #28a745; font-weight: 600;">✓ Present</span> - Student attended the full class</li>
+                <li><span style="color: #ffc107; font-weight: 600;">⏰ Late</span> - Student attended but arrived late</li>
+                <li><span style="color: #dc3545; font-weight: 600;">✗ Absent</span> - Student did not attend</li>
+                <li>You can update attendance later from the attendance report</li>
+            </ul>
+        </div>
+    </div>
+{% endblock %}

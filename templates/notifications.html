@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block title %}Notifications{% endblock %}
+
+{% block content %}
+    <h1>🔔 Notifications</h1>
+    {% if user_role == 'teacher' %}
+        <p>View all notifications you've sent to your students when creating lessons and assignments.</p>
+    {% else %}
+        <p>Stay updated with new lessons and assignments from your courses.</p>
+    {% endif %}
+    
+    {% if user_role == 'student' and unread_count > 0 %}
+        <div style="background: #d4edda; border: 2px solid #28a745; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <strong>📬 You have {{ unread_count }} unread notification(s)</strong>
+            </div>
+            {% if notifications %}
+                <form method="POST" action="{{ url_for('clear_all_notifications') }}" style="display: inline;">
+                    <button type="submit" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">Mark All as Read</button>
+                </form>
+            {% endif %}
+        </div>
+    {% endif %}
+    
+    {% if user_role == 'teacher' and unread_count > 0 %}
+        <div style="background: #cfe2ff; border: 2px solid #084298; color: #084298; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <strong>📤 You've sent {{ unread_count }} notification(s) to your students</strong>
+        </div>
+    {% endif %}
+    
+    {% if notifications %}
+        <div style="display: grid; gap: 15px;">
+            {% for notification in notifications %}
+                <div class="card" style="border-left: 5px solid {% if user_role == 'teacher' %}var(--accent-blue){% elif notification.is_read %}var(--border-color){% else %}var(--accent-blue){% endif %}; {% if user_role == 'student' and not notification.is_read %}background: #f0f8ff;{% endif %} transition: all 0.3s ease;">
+                    <div class="card-header" style="background: {% if user_role == 'teacher' %}linear-gradient(135deg, var(--primary-navy), var(--primary-blue)){% elif not notification.is_read %}linear-gradient(135deg, var(--primary-navy), var(--primary-blue)){% else %}var(--bg-light){% endif %}; color: {% if user_role == 'teacher' or not notification.is_read %}white{% else %}var(--dark-text){% endif %}; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h4 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                                {% if notification.notification_type == 'lesson' %}
+                                    📖 {{ notification.title }}
+                                {% elif notification.notification_type == 'assignment' %}
+                                    ✏️ {{ notification.title }}
+                                {% else %}
+                                    📬 {{ notification.title }}
+                                {% endif %}
+                                {% if user_role == 'student' and not notification.is_read %}
+                                    <span style="background: var(--accent-blue); padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold;">NEW</span>
+                                {% endif %}
+                            </h4>
+                            <p style="margin: 5px 0 0 0; font-size: 12px; opacity: 0.9;">
+                                {% if user_role == 'teacher' %}
+                                    📤 Sent to {{ notification.student_name or 'Student' }} in {{ notification.course_title or 'Course' }}
+                                {% else %}
+                                    📚 {{ notification.course_title or 'Course' }}
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <p style="color: var(--medium-text); margin: 0 0 15px 0;">
+                            {{ notification.message }}
+                        </p>
+                        
+                        <div style="display: flex; gap: 10px; align-items: center; justify-content: space-between;">
+                            <p style="color: var(--light-text); font-size: 12px; margin: 0;">
+                                🕐 {{ notification.created_at }}
+                            </p>
+                            
+                            <div style="display: flex; gap: 10px;">
+                                {% if user_role == 'student' %}
+                                    {% if notification.notification_type == 'lesson' and notification.resource_id %}
+                                        <a href="{{ url_for('view_lesson', lesson_id=notification.resource_id) }}" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">
+                                            📖 View Lesson
+                                        </a>
+                                    {% elif notification.notification_type == 'assignment' and notification.resource_id %}
+                                        <a href="{{ url_for('assignments') }}" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">
+                                            ✏️ View Assignment
+                                        </a>
+                                    {% endif %}
+                                    
+                                    {% if not notification.is_read %}
+                                        <a href="{{ url_for('mark_notification_read', notification_id=notification.id) }}" class="btn btn-outline" style="padding: 8px 16px; font-size: 13px;">
+                                            ✓ Mark as Read
+                                        </a>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div style="background: #e8f0f8; border: 2px solid var(--accent-blue); padding: 40px; border-radius: 12px; text-align: center; margin-top: 40px;">
+            <h2 style="color: var(--primary-navy); margin-bottom: 15px;">📭 No Notifications</h2>
+            <p style="color: var(--medium-text); font-size: 16px; margin-bottom: 20px;">
+                {% if user_role == 'teacher' %}
+                    You haven't sent any notifications yet. Create lessons or assignments to notify your students.
+                {% else %}
+                    You're all caught up! New lessons and assignments will appear here.
+                {% endif %}
+            </p>
+            {% if user_role == 'student' %}
+                <a href="{{ url_for('course') }}" class="btn btn-primary">📚 Browse Courses</a>
+            {% else %}
+                <a href="{{ url_for('teacher_dashboard') }}" class="btn btn-primary">📚 Go to Dashboard</a>
+            {% endif %}
+        </div>
+    {% endif %}
+    
+    <!-- Info Box -->
+    <div style="margin-top: 40px; background: #f0f8ff; border: 2px solid var(--accent-blue); padding: 20px; border-radius: 8px;">
+        <h3 style="color: var(--primary-navy); margin-top: 0;">ℹ️ About Notifications</h3>
+        {% if user_role == 'teacher' %}
+            <ul style="margin: 0; padding-left: 20px; color: var(--medium-text); font-size: 14px; line-height: 1.8;">
+                <li><strong>📖 Lesson Notifications:</strong> Automatically sent when you create a new lesson</li>
+                <li><strong>✏️ Assignment Notifications:</strong> Automatically sent when you create a new assignment</li>
+                <li><strong>👥 Recipients:</strong> Notifications are sent to all students enrolled in the course</li>
+                <li>View this page to see all notifications you've sent to your students</li>
+            </ul>
+        {% else %}
+            <ul style="margin: 0; padding-left: 20px; color: var(--medium-text); font-size: 14px; line-height: 1.8;">
+                <li><strong>📖 New Lessons:</strong> When a teacher adds a new lesson to your course</li>
+                <li><strong>✏️ New Assignments:</strong> When a teacher creates a new quiz or assignment</li>
+                <li><strong>🔔 Real-time Updates:</strong> Get notified immediately when content is added</li>
+                <li>You can mark notifications as read or clear all at once</li>
+            </ul>
+        {% endif %}
+    </div>
+{% endblock %}

@@ -34,7 +34,7 @@
                             <p class="text-muted"><small>Enrolled: {{ course.enrolled_at or 'Recently' }}</small></p>
                             
                             <div style="display: flex; gap: 10px; margin-top: auto; padding-top: 15px; border-top: 1px solid var(--border-color);">
-                                <a href="{{ url_for('manage_course', course_id=course.id) }}" class="btn btn-primary" style="flex: 1; text-align: center;">
+                                <a href="{{ url_for('learn_course', course_id=course.id) }}" class="btn btn-primary" style="flex: 1; text-align: center;">
                                     📚 Continue Learning
                                 </a>
                                 <a href="{{ url_for('course') }}#allTab" class="btn btn-secondary" style="flex: 1; text-align: center;">

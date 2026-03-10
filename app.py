@@ -111,6 +111,31 @@ def init_db():
             FOREIGN KEY (teacher_id) REFERENCES users(id)
         )
     """)
+
+    # Migration: ensure `courses` table has expected columns when upgrading from older schema
+    try:
+        cursor.execute("PRAGMA table_info(courses)")
+        existing_cols = [row['name'] for row in cursor.fetchall()]
+
+        columns_to_add = {
+            'course_id': "INTEGER",
+            'course_type': "TEXT DEFAULT 'Self-Paced'",
+            'duration': "TEXT DEFAULT 'Flexible'",
+            'level': "TEXT DEFAULT 'Beginner'",
+            'teacher_id': "INTEGER",
+            'created_at': "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        }
+
+        for col, definition in columns_to_add.items():
+            if col not in existing_cols:
+                try:
+                    cursor.execute(f"ALTER TABLE courses ADD COLUMN {col} {definition}")
+                except sqlite3.OperationalError:
+                    # If ALTER TABLE fails for any reason, ignore and continue - table will still be usable
+                    pass
+    except Exception:
+        # If PRAGMA or inspection fails, continue without raising to avoid breaking init on older DBs
+        pass
     
     # Create topics table for storing lesson topics within courses
     cursor.execute("""
@@ -123,12 +148,26 @@ def init_db():
             title TEXT UNIQUE,
             -- Optional subtitle or description
             subtitle TEXT,
+            -- Lesson content (body text for the lesson)
+            content TEXT,
             -- Timestamp when topic was created
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             -- Foreign key linking to courses table
             FOREIGN KEY (course_id) REFERENCES courses(id)
         )
     """)
+    
+    # Migration: ensure `topics` table has content column
+    try:
+        cursor.execute("PRAGMA table_info(topics)")
+        existing_cols = [row['name'] for row in cursor.fetchall()]
+        if 'content' not in existing_cols:
+            try:
+                cursor.execute("ALTER TABLE topics ADD COLUMN content TEXT")
+            except sqlite3.OperationalError:
+                pass
+    except Exception:
+        pass
     
     # Create msqs table for storing multiple choice questions
     cursor.execute("""
@@ -198,6 +237,102 @@ def init_db():
         )
     """)
     
+    # Create attendance table to track student attendance in lessons
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS attendance (
+            -- Unique identifier for each attendance record
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            -- ID of the student
+            student_id INTEGER NOT NULL,
+            -- ID of the lesson/topic
+            lesson_id INTEGER NOT NULL,
+            -- ID of the course
+            course_id INTEGER NOT NULL,
+            -- Attendance status: 'present', 'absent', 'late'
+            status TEXT DEFAULT 'absent',
+            -- Date of the lesson
+            lesson_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            -- Timestamp when attendance was recorded
+            recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            -- Foreign keys
+            FOREIGN KEY (student_id) REFERENCES users(id),
+            FOREIGN KEY (lesson_id) REFERENCES topics(id),
+            FOREIGN KEY (course_id) REFERENCES courses(id)
+        )
+    """)
+    
+    # Create notifications table to notify students of new lessons and assignments
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notifications (
+            -- Unique identifier for each notification
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            -- ID of the student receiving the notification
+            student_id INTEGER NOT NULL,
+            -- ID of the course
+            course_id INTEGER NOT NULL,
+            -- Type of notification: 'lesson', 'assignment'
+            notification_type TEXT NOT NULL,
+            -- Title of the notification
+            title TEXT NOT NULL,
+            -- Message content
+            message TEXT,
+            -- Link to the resource (lesson_id or assignment_id)
+            resource_id INTEGER,
+            -- Whether the notification has been read
+            is_read INTEGER DEFAULT 0,
+            -- Timestamp when notification was created
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            -- Foreign keys
+            FOREIGN KEY (student_id) REFERENCES users(id),
+            FOREIGN KEY (course_id) REFERENCES courses(id)
+        )
+    """)
+    
+    # Create grades table to store assignment grades and teacher feedback
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS grades (
+            -- Unique identifier for each grade record
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            -- ID of the student being graded
+            student_id INTEGER NOT NULL,
+            -- ID of the assignment being graded
+            assignment_id INTEGER NOT NULL,
+            -- ID of the teacher giving the grade
+            teacher_id INTEGER NOT NULL,
+            -- Numeric grade (0-100)
+            grade REAL,
+            -- Feedback comments from the teacher
+            feedback TEXT,
+            -- Timestamp when grade was given
+            graded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            -- Timestamp when last updated
+            updated_at TIMESTAMP,
+            -- Foreign keys
+            FOREIGN KEY (student_id) REFERENCES users(id),
+            FOREIGN KEY (assignment_id) REFERENCES assignments(id),
+            FOREIGN KEY (teacher_id) REFERENCES users(id)
+        )
+    """)
+    
+    # Create comments table for course discussions and student interactions
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS comments (
+            -- Unique identifier for each comment
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            -- ID of the user posting the comment
+            user_id INTEGER NOT NULL,
+            -- ID of the course the comment is about
+            course_id INTEGER NOT NULL,
+            -- Content of the comment/message
+            message TEXT NOT NULL,
+            -- Timestamp when comment was created
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            -- Foreign keys
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (course_id) REFERENCES courses(id)
+        )
+    """)
+    
     # Commit all changes to the database
     conn.commit()
     # Close the database connection
@@ -257,12 +392,16 @@ def home():
     # Safely count users - returns 0 if users table doesn't exist
     users_count = safe_count_query("SELECT COUNT(*) as count FROM users")
     
+    # Check if user is logged in
+    is_logged_in = 'user_id' in session
+    
     # Render home.html template and pass the statistics as variables
     # These variables can be used in the HTML template with {{ variable_name }}
     return render_template('home.html', 
                          courses_count=courses_count,
                          topics_count=topics_count,
-                         users_count=users_count)
+                         users_count=users_count,
+                         is_logged_in=is_logged_in)
 
 
 # Define route for registration page (GET and POST)
@@ -556,15 +695,16 @@ def teacher_dashboard():
         # Get the count
         total_assignments = cursor.fetchone()['count']
         
-        # Close connection
-        conn.close()
-        
+        # Pop one-time welcome message if present
+        welcome = session.pop('welcome', None)
+
         # Render teacher dashboard template with statistics
         return render_template('teacher_dashboard.html',
                              my_courses=my_courses,
                              total_students=total_students,
                              total_assignments=total_assignments,
-                             full_name=session.get('full_name'))
+                             full_name=session.get('full_name'),
+                             welcome=welcome)
     
     except Exception as e:
         # Handle any database errors
@@ -763,6 +903,20 @@ def manage_course(course_id):
             WHERE topic_id IN (SELECT id FROM topics WHERE course_id = ?)
             ORDER BY created_at DESC
         """, (course_id,))
+        questions = cursor.fetchall()
+        
+        # Fetch all assignment submissions (assignment metadata) for this course
+        cursor.execute("""
+            SELECT a.id, a.title, a.description, a.deadline,
+                   COUNT(DISTINCT g.id) as graded_count,
+                   COUNT(DISTINCT u.id) as total_students
+            FROM assignments a
+            LEFT JOIN grades g ON a.id = g.assignment_id
+            LEFT JOIN (SELECT DISTINCT student_id FROM enrollments WHERE course_id = ?) u ON 1=1
+            WHERE a.course_id = ?
+            GROUP BY a.id
+            ORDER BY a.id DESC
+        """, (course_id, course_id))
         assignments = cursor.fetchall()
         
         # Close connection
@@ -772,7 +926,8 @@ def manage_course(course_id):
         return render_template('manage_course.html',
                              course=course,
                              lessons=lessons,
-                             assignments=assignments)
+                             assignments=assignments,
+                             questions=questions)
     
     except Exception as e:
         # Handle any database errors
@@ -826,7 +981,8 @@ def create_lesson(course_id):
         if request.method == 'POST':
             # Extract form data from the lesson creation form
             title = request.form.get('title')
-            subtitle = request.form.get('content')
+            subtitle = request.form.get('subtitle')
+            content = request.form.get('content')
             
             # Validation: Check if lesson title is provided
             if not title:
@@ -835,9 +991,33 @@ def create_lesson(course_id):
             
             # Execute SQL INSERT to add new lesson (topic) to database
             cursor.execute("""
-                INSERT INTO topics (course_id, title, subtitle)
-                VALUES (?, ?, ?)
-            """, (course_id, title, subtitle))
+                INSERT INTO topics (course_id, title, subtitle, content)
+                VALUES (?, ?, ?, ?)
+            """, (course_id, title, subtitle, content))
+            
+            # Get the lesson ID that was just created
+            lesson_id = cursor.lastrowid
+            
+            # Fetch all students enrolled in the course to notify them
+            cursor.execute("""
+                SELECT student_id FROM enrollments WHERE course_id = ?
+            """, (course_id,))
+            
+            students = cursor.fetchall()
+            
+            # Create notifications for all enrolled students
+            try:
+                for student in students:
+                    cursor.execute("""
+                        INSERT INTO notifications (student_id, course_id, notification_type, title, message, resource_id)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (student['student_id'], course_id, 'lesson', 
+                          f"New Lesson: {title}", 
+                          f"A new lesson '{title}' has been added to the course.",
+                          lesson_id))
+                print(f"Created notifications for {len(students)} enrolled students in lesson '{title}'")
+            except Exception as notif_error:
+                print(f"Error creating notifications: {str(notif_error)}")
             
             # Commit the changes to the database
             conn.commit()
@@ -856,7 +1036,228 @@ def create_lesson(course_id):
     
     except Exception as e:
         # Handle any unexpected errors
-        return render_template('error.html', error='Error creating lesson!')
+        print(f"Error in create_lesson: {str(e)}")
+        return render_template('error.html', error=f'Error creating lesson: {str(e)}')
+
+
+# Define route for editing a lesson
+@app.route("/edit_lesson/<int:lesson_id>", methods=['GET', 'POST'])
+def edit_lesson(lesson_id):
+    """
+    Handle lesson editing for both GET (display form) and POST (process form).
+    
+    GET: Display lesson editing form
+    POST: Process lesson editing form submission
+    
+    Args:
+        lesson_id (int): ID of the lesson/topic to edit
+    
+    Returns:
+        GET: Rendered lesson editing form template
+        POST: Redirect to course management page on success or back to edit on error
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Check if user role is 'teacher'
+    if session.get('role') != 'teacher':
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Fetch the lesson details
+        cursor.execute("""
+            SELECT t.*, c.id as course_id 
+            FROM topics t
+            LEFT JOIN courses c ON t.course_id = c.id
+            WHERE t.id = ?
+        """, (lesson_id,))
+        
+        lesson = cursor.fetchone()
+        
+        if not lesson:
+            conn.close()
+            return render_template('error.html', error='Lesson not found!')
+        
+        # Verify teacher owns this course
+        cursor.execute("""
+            SELECT id FROM courses WHERE id = ? AND teacher_id = ?
+        """, (lesson['course_id'], session['user_id']))
+        
+        if not cursor.fetchone():
+            conn.close()
+            return render_template('error.html', error='Unauthorized!')
+        
+        # If request is POST (form submission)
+        if request.method == 'POST':
+            title = request.form.get('title')
+            subtitle = request.form.get('subtitle')
+            content = request.form.get('content')
+            
+            if not title:
+                return render_template('edit_lesson.html', lesson=lesson, error='Lesson title is required!')
+            
+            # Update the lesson in database
+            cursor.execute("""
+                UPDATE topics 
+                SET title = ?, subtitle = ?, content = ?
+                WHERE id = ?
+            """, (title, subtitle, content, lesson_id))
+            
+            conn.commit()
+            conn.close()
+            
+            return render_template('edit_lesson.html', 
+                                 lesson=lesson,
+                                 success='Lesson updated successfully!')
+        
+        conn.close()
+        return render_template('edit_lesson.html', lesson=lesson)
+    
+    except Exception as e:
+        return render_template('error.html', error='Error editing lesson!')
+
+
+# Define route for deleting a lesson
+@app.route("/delete_lesson/<int:lesson_id>", methods=['POST'])
+def delete_lesson(lesson_id):
+    """
+    Delete a lesson/topic from the database.
+    
+    Args:
+        lesson_id (int): ID of the lesson to delete
+    
+    Returns:
+        Redirect to manage_course page
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Check if user is a teacher
+    if session.get('role') != 'teacher':
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Fetch the lesson to get course_id
+        cursor.execute("""
+            SELECT course_id FROM topics WHERE id = ?
+        """, (lesson_id,))
+        
+        lesson = cursor.fetchone()
+        if not lesson:
+            conn.close()
+            return redirect(url_for('teacher_dashboard'))
+        
+        course_id = lesson['course_id']
+        
+        # Verify teacher owns this course
+        cursor.execute("""
+            SELECT id FROM courses WHERE id = ? AND teacher_id = ?
+        """, (course_id, session['user_id']))
+        
+        if not cursor.fetchone():
+            conn.close()
+            return render_template('error.html', error='Unauthorized!')
+        
+        # Delete all submissions for questions in this lesson
+        cursor.execute("""
+            DELETE FROM submissions 
+            WHERE question_id IN (
+                SELECT id FROM msqs WHERE topic_id = ?
+            )
+        """, (lesson_id,))
+        
+        # Delete all questions for this lesson
+        cursor.execute("""
+            DELETE FROM msqs WHERE topic_id = ?
+        """, (lesson_id,))
+        
+        # Delete the lesson
+        cursor.execute("""
+            DELETE FROM topics WHERE id = ?
+        """, (lesson_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return redirect(url_for('manage_course', course_id=course_id))
+    
+    except Exception as e:
+        return render_template('error.html', error='Error deleting lesson!')
+
+
+# Define route for deleting an assignment/question
+@app.route("/delete_assignment/<int:assignment_id>", methods=['POST'])
+def delete_assignment(assignment_id):
+    """
+    Delete an assignment/question from the database.
+    
+    Args:
+        assignment_id (int): ID of the assignment to delete
+    
+    Returns:
+        Redirect to manage_course page
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Check if user is a teacher
+    if session.get('role') != 'teacher':
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Fetch the assignment and get course_id through topic
+        cursor.execute("""
+            SELECT m.id, t.course_id 
+            FROM msqs m
+            LEFT JOIN topics t ON m.topic_id = t.id
+            WHERE m.id = ?
+        """, (assignment_id,))
+        
+        assignment = cursor.fetchone()
+        if not assignment:
+            conn.close()
+            return redirect(url_for('teacher_dashboard'))
+        
+        course_id = assignment['course_id']
+        
+        # Verify teacher owns this course
+        cursor.execute("""
+            SELECT id FROM courses WHERE id = ? AND teacher_id = ?
+        """, (course_id, session['user_id']))
+        
+        if not cursor.fetchone():
+            conn.close()
+            return render_template('error.html', error='Unauthorized!')
+        
+        # Delete all submissions for this question
+        cursor.execute("""
+            DELETE FROM submissions WHERE question_id = ?
+        """, (assignment_id,))
+        
+        # Delete the question/assignment
+        cursor.execute("""
+            DELETE FROM msqs WHERE id = ?
+        """, (assignment_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return redirect(url_for('manage_course', course_id=course_id))
+    
+    except Exception as e:
+        return render_template('error.html', error='Error deleting assignment!')
 
 
 # Define route for assignment creation page
@@ -914,36 +1315,83 @@ def create_assignment(course_id):
         if request.method == 'POST':
             # Extract form data from the assignment creation form
             topic_id = request.form.get('topic_id')
+            new_topic_title = request.form.get('new_topic_title')
+            new_topic_subtitle = request.form.get('new_topic_subtitle')
             question = request.form.get('question')
             option_a = request.form.get('option_a')
             option_b = request.form.get('option_b')
             option_c = request.form.get('option_c')
             option_d = request.form.get('option_d')
             correct_answer = request.form.get('correct_answer')
-            
-            # Validation: Check if all fields are filled
-            if not all([topic_id, question, option_a, option_b, option_c, option_d, correct_answer]):
-                return render_template('create_assignment.html', 
-                                     course=course, 
-                                     topics=topics,
-                                     error='All fields are required!')
-            
+
+            # Allow creating a new topic inline: require either an existing topic or a new topic title
+            if not (topic_id or (new_topic_title and new_topic_title.strip())):
+                return render_template('create_assignment.html', course=course, topics=topics, error='Please select a topic or enter a new topic title!')
+
+            # Validation: Check if required assignment fields are filled
+            if not all([question, option_a, option_b, option_c, option_d, correct_answer]):
+                return render_template('create_assignment.html', course=course, topics=topics, error='All fields are required!')
+
+            # If new topic title provided, create the topic and use its id
+            if new_topic_title and new_topic_title.strip():
+                cursor.execute("""
+                    INSERT INTO topics (course_id, title, subtitle)
+                    VALUES (?, ?, ?)
+                """, (course_id, new_topic_title.strip(), new_topic_subtitle))
+                conn.commit()
+                topic_id = cursor.lastrowid
+
+                # Refresh topics list so the new topic appears in the dropdown
+                cursor.execute("""
+                    SELECT id, title FROM topics
+                    WHERE course_id = ?
+                    ORDER BY created_at DESC
+                """, (course_id,))
+                topics = cursor.fetchall()
+
+            # Ensure topic_id is an int
+            try:
+                topic_id = int(topic_id)
+            except Exception:
+                return render_template('create_assignment.html', course=course, topics=topics, error='Invalid topic selected')
+
             # Execute SQL INSERT to add new assignment (question) to database
             cursor.execute("""
                 INSERT INTO msqs (topic_id, question, option_a, option_b, option_c, option_d, correct_answer)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (topic_id, question, option_a, option_b, option_c, option_d, correct_answer))
             
+            # Get the assignment ID that was just created
+            assignment_id = cursor.lastrowid
+            
+            # Fetch all students enrolled in the course to notify them
+            cursor.execute("""
+                SELECT student_id FROM enrollments WHERE course_id = ?
+            """, (course_id,))
+            
+            students = cursor.fetchall()
+            
+            # Create notifications for all enrolled students
+            try:
+                for student in students:
+                    cursor.execute("""
+                        INSERT INTO notifications (student_id, course_id, notification_type, title, message, resource_id)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (student['student_id'], course_id, 'assignment', 
+                          f"New Assignment: {question[:50]}...", 
+                          f"A new assignment has been added: {question[:80]}",
+                          assignment_id))
+                print(f"Created notifications for {len(students)} enrolled students in assignment: {question[:50]}...")
+            except Exception as notif_error:
+                print(f"Error creating assignment notifications: {str(notif_error)}")
+
             # Commit the changes to the database
             conn.commit()
             # Close the connection
             conn.close()
-            
-            # Render success message
-            return render_template('create_assignment.html',
-                                 course=course,
-                                 topics=topics,
-                                 success='Assignment created successfully!')
+
+            # Render success message and select the topic that was used
+            return render_template('create_assignment.html', course=course, topics=topics, success='Assignment created successfully!', selected_topic_id=topic_id)
         
         # If request is GET (display form)
         # Render the assignment creation form template
@@ -952,7 +1400,8 @@ def create_assignment(course_id):
     
     except Exception as e:
         # Handle any unexpected errors
-        return render_template('error.html', error='Error creating assignment!')
+        print(f"Error in create_assignment: {str(e)}")
+        return render_template('error.html', error=f'Error creating assignment: {str(e)}')
 
 
 # Define route for lessons page
@@ -998,6 +1447,55 @@ def lessons():
     # Render lessons.html template and pass lessons data as variable
     # The template can loop through this data with {% for lesson in lessons %}
     return render_template('lessons.html', lessons=lessons_data)
+
+
+# Define route for viewing a specific lesson
+@app.route("/lesson/<int:lesson_id>")
+def view_lesson(lesson_id):
+    """
+    Display a specific lesson with its content and details.
+    
+    Args:
+        lesson_id (int): ID of the lesson/topic to view
+    
+    Returns:
+        Rendered lesson detail page
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Fetch the specific lesson details
+        cursor.execute("""
+            SELECT t.id, t.title, t.subtitle, t.content, c.id as course_id, c.title as course_title
+            FROM topics t
+            LEFT JOIN courses c ON t.course_id = c.id
+            WHERE t.id = ?
+        """, (lesson_id,))
+        
+        lesson = cursor.fetchone()
+        
+        if not lesson:
+            conn.close()
+            return render_template('error.html', error='Lesson not found!')
+        
+        # Fetch all questions/assignments for this lesson
+        cursor.execute("""
+            SELECT id, question, option_a, option_b, option_c, option_d, correct_answer
+            FROM msqs
+            WHERE topic_id = ?
+            ORDER BY id ASC
+        """, (lesson_id,))
+        
+        questions = cursor.fetchall()
+        conn.close()
+        
+        return render_template('lesson_detail.html', 
+                             lesson=lesson,
+                             questions=questions)
+    
+    except Exception as e:
+        return render_template('error.html', error='Error loading lesson!')
 
 
 # Define route for courses page
@@ -1050,6 +1548,111 @@ def course():
                          enrolled_courses=enrolled_courses,
                          is_logged_in=user_id is not None,
                          is_student=user_role == 'student')
+
+
+# Define route for learning a specific course (student view)
+@app.route("/learn/<int:course_id>")
+def learn_course(course_id):
+    """
+    Display course learning page for a student with all lessons and assignments.
+    
+    Shows:
+    - Course details (title, description, instructor)
+    - Progress tracking
+    - All lessons in the course with links
+    - All assignments for the course
+    - Course materials
+    
+    Args:
+        course_id (int): ID of the course to learn
+    
+    Returns:
+        Rendered course learning page
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Check if user is a student
+    if session.get('role') != 'student':
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Fetch course details
+        cursor.execute("""
+            SELECT c.id, c.title, c.description, c.level, c.duration, 
+                   u.full_name as teacher_name, c.course_type
+            FROM courses c
+            LEFT JOIN users u ON c.teacher_id = u.id
+            WHERE c.id = ?
+        """, (course_id,))
+        
+        course = cursor.fetchone()
+        
+        if not course:
+            conn.close()
+            return render_template('error.html', error='Course not found!')
+        
+        # Check if student is enrolled in this course
+        cursor.execute("""
+            SELECT progress FROM enrollments
+            WHERE student_id = ? AND course_id = ?
+        """, (session['user_id'], course_id))
+        
+        enrollment = cursor.fetchone()
+        
+        if not enrollment:
+            conn.close()
+            return render_template('error.html', error='You are not enrolled in this course!')
+        
+        # Fetch all lessons/topics for this course
+        cursor.execute("""
+            SELECT id, title, subtitle, content, created_at
+            FROM topics
+            WHERE course_id = ?
+            ORDER BY created_at ASC
+        """, (course_id,))
+        
+        lessons = cursor.fetchall()
+        
+        # Fetch all assignments/questions for this course
+        cursor.execute("""
+            SELECT m.id, m.question, m.correct_answer, t.id as topic_id, t.title as topic_title
+            FROM msqs m
+            LEFT JOIN topics t ON m.topic_id = t.id
+            WHERE t.course_id = ?
+            ORDER BY t.created_at ASC, m.id ASC
+        """, (course_id,))
+        
+        assignments = cursor.fetchall()
+        
+        # Count student's correct submissions for this course
+        cursor.execute("""
+            SELECT COUNT(*) as total_correct
+            FROM submissions s
+            JOIN msqs m ON s.question_id = m.id
+            JOIN topics t ON m.topic_id = t.id
+            WHERE s.student_id = ? AND t.course_id = ? AND s.is_correct = 1
+        """, (session['user_id'], course_id))
+        
+        stats = cursor.fetchone()
+        correct_submissions = stats['total_correct'] if stats else 0
+        
+        conn.close()
+        
+        return render_template('learn_course.html',
+                             course=course,
+                             lessons=lessons,
+                             assignments=assignments,
+                             progress=enrollment['progress'],
+                             correct_submissions=correct_submissions,
+                             total_assignments=len(assignments))
+    
+    except Exception as e:
+        return render_template('error.html', error='Error loading course!')
 
 
 # Define route for assignments page
@@ -1145,6 +1748,1028 @@ def enroll_course(course_id):
     
     # Redirect to student dashboard after enrolling
     return redirect(url_for('student_dashboard'))
+
+
+# Define route for marking attendance for a lesson
+@app.route("/mark_attendance/<int:lesson_id>", methods=['GET', 'POST'])
+def mark_attendance(lesson_id):
+    """
+    Mark attendance for students in a lesson.
+    
+    GET: Display attendance form with list of enrolled students
+    POST: Save attendance records to database
+    
+    Args:
+        lesson_id (int): ID of the lesson
+    
+    Returns:
+        Rendered attendance form or redirect to manage_course
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Check if user is a teacher
+    if session.get('role') != 'teacher':
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get lesson details and verify teacher owns it
+        cursor.execute("""
+            SELECT t.id, t.title, t.course_id, c.id as course_check
+            FROM topics t
+            LEFT JOIN courses c ON t.course_id = c.id
+            WHERE t.id = ? AND c.teacher_id = ?
+        """, (lesson_id, session['user_id']))
+        
+        lesson = cursor.fetchone()
+        
+        if not lesson:
+            conn.close()
+            return render_template('error.html', error='Lesson not found or unauthorized!')
+        
+        course_id = lesson['course_id']
+        
+        if request.method == 'POST':
+            # Get form data for all students
+            attendance_data = request.form.to_dict()
+            
+            # Process each student
+            for key, value in attendance_data.items():
+                if key.startswith('attendance_'):
+                    try:
+                        student_id = int(key.split('_')[1])
+                        status = value  # 'present', 'absent', 'late'
+                        
+                        # Check if attendance record exists for today
+                        cursor.execute("""
+                            SELECT id FROM attendance
+                            WHERE student_id = ? AND lesson_id = ? AND DATE(lesson_date) = DATE('now')
+                        """, (student_id, lesson_id))
+                        
+                        existing = cursor.fetchone()
+                        
+                        if existing:
+                            # Update existing record
+                            cursor.execute("""
+                                UPDATE attendance
+                                SET status = ?
+                                WHERE student_id = ? AND lesson_id = ? AND DATE(lesson_date) = DATE('now')
+                            """, (status, student_id, lesson_id))
+                        else:
+                            # Insert new record
+                            cursor.execute("""
+                                INSERT INTO attendance (student_id, lesson_id, course_id, status)
+                                VALUES (?, ?, ?, ?)
+                            """, (student_id, lesson_id, course_id, status))
+                    except (ValueError, IndexError):
+                        continue
+            
+            conn.commit()
+            conn.close()
+            
+            return redirect(url_for('manage_course', course_id=course_id))
+        
+        # GET: Fetch all students enrolled in the course
+        cursor.execute("""
+            SELECT DISTINCT u.id, u.full_name, e.student_id
+            FROM users u
+            JOIN enrollments e ON u.id = e.student_id
+            WHERE e.course_id = ? AND u.role = 'student'
+            ORDER BY u.full_name
+        """, (course_id,))
+        
+        students = cursor.fetchall()
+        
+        # Fetch today's attendance records for this lesson
+        cursor.execute("""
+            SELECT student_id, status FROM attendance
+            WHERE lesson_id = ? AND DATE(lesson_date) = DATE('now')
+        """, (lesson_id,))
+        
+        attendance_records = {row['student_id']: row['status'] for row in cursor.fetchall()}
+        
+        conn.close()
+        
+        return render_template('mark_attendance.html',
+                             lesson=lesson,
+                             students=students,
+                             attendance_records=attendance_records,
+                             course_id=course_id)
+    
+    except Exception as e:
+        return render_template('error.html', error='Error marking attendance!')
+
+
+# Define route for viewing attendance reports
+@app.route("/attendance/<int:course_id>")
+def view_attendance(course_id):
+    """
+    View attendance report for a course.
+    
+    Shows attendance records for all students and lessons in the course.
+    
+    Args:
+        course_id (int): ID of the course
+    
+    Returns:
+        Rendered attendance report page
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Check if user is a teacher
+    if session.get('role') != 'teacher':
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Verify teacher owns this course
+        cursor.execute("""
+            SELECT id, title FROM courses WHERE id = ? AND teacher_id = ?
+        """, (course_id, session['user_id']))
+        
+        course = cursor.fetchone()
+        
+        if not course:
+            conn.close()
+            return render_template('error.html', error='Course not found or unauthorized!')
+        
+        # Get all students enrolled in the course
+        cursor.execute("""
+            SELECT DISTINCT u.id, u.full_name
+            FROM users u
+            JOIN enrollments e ON u.id = e.student_id
+            WHERE e.course_id = ? AND u.role = 'student'
+            ORDER BY u.full_name
+        """, (course_id,))
+        
+        students = cursor.fetchall()
+        
+        # Get all lessons in the course
+        cursor.execute("""
+            SELECT id, title FROM topics WHERE course_id = ? ORDER BY created_at ASC
+        """, (course_id,))
+        
+        lessons = cursor.fetchall()
+        
+        # Get all attendance records
+        cursor.execute("""
+            SELECT student_id, lesson_id, status, lesson_date
+            FROM attendance
+            WHERE course_id = ?
+            ORDER BY lesson_date DESC
+        """, (course_id,))
+        
+        attendance_records = cursor.fetchall()
+        
+        # Organize attendance data for easy access
+        attendance_data = {}
+        for record in attendance_records:
+            key = (record['student_id'], record['lesson_id'])
+            attendance_data[key] = record['status']
+        
+        conn.close()
+        
+        return render_template('attendance_report.html',
+                             course=course,
+                             students=students,
+                             lessons=lessons,
+                             attendance_data=attendance_data)
+    
+    except Exception as e:
+        return render_template('error.html', error='Error loading attendance report!')
+
+
+# Define route for submitting assignment answers
+@app.route("/submit_assignment", methods=['POST'])
+def submit_assignment():
+    """
+    Handle assignment submission from students.
+    
+    Processes the form data from assignments.html form submission,
+    validates answers, saves submissions to the database, and redirects to results page.
+    
+    Returns:
+        Redirect to assignment results page or back to assignments on error
+    """
+    # Check if user is logged in by checking if 'user_id' exists in session
+    if 'user_id' not in session:
+        # Redirect to login if not logged in
+        return redirect(url_for('login'))
+    
+    # Check if user role is 'student'
+    if session.get('role') != 'student':
+        # Redirect to home if not a student
+        return redirect(url_for('home'))
+    
+    try:
+        # Establish connection to the database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get all form data from the submission
+        form_data = request.form.to_dict()
+        
+        # Track submission statistics
+        total_correct = 0
+        total_questions = 0
+        submission_ids = []
+        
+        # Process each question submission
+        for key, value in form_data.items():
+            # Form key format: question_<question_id>
+            if key.startswith('question_'):
+                try:
+                    # Extract question ID from form key
+                    question_id = int(key.split('_')[1])
+                    selected_answer = value.upper() if value else None
+                    
+                    if not selected_answer or selected_answer not in ['A', 'B', 'C', 'D']:
+                        # Skip invalid answers
+                        continue
+                    
+                    # Fetch the correct answer for this question
+                    cursor.execute("""
+                        SELECT correct_answer FROM msqs WHERE id = ?
+                    """, (question_id,))
+                    
+                    result = cursor.fetchone()
+                    if not result:
+                        # Skip if question not found
+                        continue
+                    
+                    correct_answer = result['correct_answer'].upper()
+                    # Determine if answer is correct
+                    is_correct = 1 if selected_answer == correct_answer else 0
+                    
+                    # Insert submission record into database
+                    cursor.execute("""
+                        INSERT INTO submissions (student_id, question_id, selected_answer, is_correct)
+                        VALUES (?, ?, ?, ?)
+                    """, (session['user_id'], question_id, selected_answer, is_correct))
+                    
+                    # Track for statistics
+                    submission_ids.append(cursor.lastrowid)
+                    if is_correct:
+                        total_correct += 1
+                    total_questions += 1
+                    
+                except (ValueError, IndexError):
+                    # Skip malformed form keys
+                    continue
+        
+        # Commit all submissions to database
+        conn.commit()
+        
+        # Calculate percentage score
+        percentage_score = int((total_correct / total_questions * 100)) if total_questions > 0 else 0
+        
+        # Close the connection
+        conn.close()
+        
+        # Redirect to results page with statistics
+        return redirect(url_for('assignment_results', 
+                              correct=total_correct, 
+                              total=total_questions,
+                              percentage=percentage_score))
+    
+    except Exception as e:
+        # Log error and redirect back to assignments
+        return redirect(url_for('assignments'))
+
+
+# Define route for viewing assignment results
+@app.route("/assignment_results")
+def assignment_results():
+    """
+    Display the results of a student's assignment submission.
+    
+    Shows score, number correct, total questions, and percentage.
+    
+    Returns:
+        Rendered results template with score information
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Get query parameters for results
+    correct = request.args.get('correct', 0, type=int)
+    total = request.args.get('total', 0, type=int)
+    percentage = request.args.get('percentage', 0, type=int)
+    
+    # Determine performance level
+    if percentage >= 80:
+        performance = "Excellent! 🌟"
+        performance_color = "#28a745"  # Green
+    elif percentage >= 60:
+        performance = "Good! 👍"
+        performance_color = "#ffc107"  # Yellow
+    else:
+        performance = "Keep Practicing! 💪"
+        performance_color = "#dc3545"  # Red
+    
+    return render_template('assignment_results.html',
+                         correct=correct,
+                         total=total,
+                         percentage=percentage,
+                         performance=performance,
+                         performance_color=performance_color)
+
+
+# Define route for viewing student's assignment submissions and grades
+@app.route("/my_assignments")
+def my_assignments():
+    """
+    Display all assignments completed by the logged-in student with their scores.
+    
+    Shows a list of all assignments the student has submitted with:
+    - Question text
+    - Student's selected answer
+    - Correct answer
+    - Whether they got it right
+    - Date submitted
+    
+    Returns:
+        Rendered my_assignments template with student's submission history
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Check if user role is 'student'
+    if session.get('role') != 'student':
+        return redirect(url_for('home'))
+    
+    try:
+        # Establish connection to the database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Fetch all submissions by this student with question details
+        cursor.execute("""
+            SELECT 
+                s.id as submission_id,
+                s.question_id,
+                s.selected_answer,
+                s.is_correct,
+                s.submitted_at,
+                m.question,
+                m.correct_answer,
+                m.option_a,
+                m.option_b,
+                m.option_c,
+                m.option_d,
+                t.title as topic_title
+            FROM submissions s
+            JOIN msqs m ON s.question_id = m.id
+            LEFT JOIN topics t ON m.topic_id = t.id
+            WHERE s.student_id = ?
+            ORDER BY s.submitted_at DESC
+        """, (session['user_id'],))
+        
+        submissions = cursor.fetchall()
+        
+        # Calculate overall statistics
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_submissions,
+                SUM(is_correct) as correct_answers
+            FROM submissions
+            WHERE student_id = ?
+        """, (session['user_id'],))
+        
+        stats = cursor.fetchone()
+        total_submissions = stats['total_submissions'] if stats['total_submissions'] else 0
+        correct_answers = stats['correct_answers'] if stats['correct_answers'] else 0
+        overall_percentage = int((correct_answers / total_submissions * 100)) if total_submissions > 0 else 0
+        
+        conn.close()
+        
+        return render_template('my_assignments.html',
+                             submissions=submissions,
+                             total_submissions=total_submissions,
+                             correct_answers=correct_answers,
+                             overall_percentage=overall_percentage)
+    
+    except Exception as e:
+        return render_template('error.html', error='Error loading your assignments!')
+
+
+# Define route for viewing assignment submissions for grading
+@app.route("/grade_assignment/<int:assignment_id>")
+def grade_assignment(assignment_id):
+    """
+    Display all student submissions for an assignment that the teacher created.
+    
+    Shows a list of all students who submitted the assignment with their submission status.
+    
+    Args:
+        assignment_id (int): ID of the assignment to view submissions for
+    
+    Returns:
+        Rendered grade_assignment template with submission list
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Check if user is a teacher
+    if session.get('role') != 'teacher':
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get assignment details
+        cursor.execute("""
+            SELECT a.*, c.title as course_title
+            FROM assignments a
+            JOIN courses c ON a.course_id = c.id
+            WHERE a.id = ? AND c.teacher_id = ?
+        """, (assignment_id, session['user_id']))
+        
+        assignment = cursor.fetchone()
+        
+        if not assignment:
+            return render_template('error.html', error='Assignment not found or unauthorized!')
+        
+        # Get all students in the course
+        cursor.execute("""
+            SELECT DISTINCT u.id, u.full_name, u.username
+            FROM users u
+            WHERE u.role = 'student'
+            ORDER BY u.full_name
+        """)
+        
+        all_students = cursor.fetchall()
+        
+        # Get grades for each student
+        grades_by_student = {}
+        for student in all_students:
+            cursor.execute("""
+                SELECT grade, feedback, graded_at
+                FROM grades
+                WHERE student_id = ? AND assignment_id = ?
+            """, (student['id'], assignment_id))
+            grade = cursor.fetchone()
+            grades_by_student[student['id']] = grade
+        
+        conn.close()
+        
+        return render_template('grade_assignment.html',
+                             assignment=assignment,
+                             students=all_students,
+                             grades=grades_by_student)
+    
+    except Exception as e:
+        return render_template('error.html', error=f'Error loading assignment: {str(e)}')
+
+
+# Define route for grading a specific student submission
+@app.route("/submit_grade/<int:assignment_id>/<int:student_id>", methods=['GET', 'POST'])
+def submit_grade(assignment_id, student_id):
+    """
+    Display grading form and process grade submission for a student's assignment.
+    
+    GET: Display the grading form with current submission details and any existing grade
+    POST: Process the grade and feedback submission
+    
+    Args:
+        assignment_id (int): ID of the assignment being graded
+        student_id (int): ID of the student being graded
+    
+    Returns:
+        GET: Rendered grading form
+        POST: Redirect to grade_assignment page
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Check if user is a teacher
+    if session.get('role') != 'teacher':
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Verify assignment exists and belongs to this teacher
+        cursor.execute("""
+            SELECT a.*, c.title as course_title
+            FROM assignments a
+            JOIN courses c ON a.course_id = c.id
+            WHERE a.id = ? AND c.teacher_id = ?
+        """, (assignment_id, session['user_id']))
+        
+        assignment = cursor.fetchone()
+        
+        if not assignment:
+            return render_template('error.html', error='Assignment not found or unauthorized!')
+        
+        # Get student details
+        cursor.execute("SELECT * FROM users WHERE id = ? AND role = 'student'", (student_id,))
+        student = cursor.fetchone()
+        
+        if not student:
+            return render_template('error.html', error='Student not found!')
+        
+        # Get existing grade if any
+        cursor.execute("""
+            SELECT * FROM grades
+            WHERE student_id = ? AND assignment_id = ?
+        """, (student_id, assignment_id))
+        
+        existing_grade = cursor.fetchone()
+        
+        if request.method == 'POST':
+            # Get grade and feedback from form
+            grade = request.form.get('grade', type=float)
+            feedback = request.form.get('feedback', '')
+            
+            # Validate grade
+            if grade is None or grade < 0 or grade > 100:
+                return render_template('grade_submission.html',
+                                     assignment=assignment,
+                                     student=student,
+                                     existing_grade=existing_grade,
+                                     error='Grade must be between 0 and 100!')
+            
+            # Check if grade already exists
+            if existing_grade:
+                # Update existing grade
+                cursor.execute("""
+                    UPDATE grades
+                    SET grade = ?, feedback = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE student_id = ? AND assignment_id = ?
+                """, (grade, feedback, student_id, assignment_id))
+            else:
+                # Insert new grade
+                cursor.execute("""
+                    INSERT INTO grades (student_id, assignment_id, teacher_id, grade, feedback)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (student_id, assignment_id, session['user_id'], grade, feedback))
+            
+            conn.commit()
+            conn.close()
+            
+            # Redirect back to assignment grading page
+            return redirect(url_for('grade_assignment', assignment_id=assignment_id))
+        
+        # GET request - show the grading form
+        conn.close()
+        
+        return render_template('grade_submission.html',
+                             assignment=assignment,
+                             student=student,
+                             existing_grade=existing_grade)
+    
+    except Exception as e:
+        return render_template('error.html', error=f'Error processing grade: {str(e)}')
+
+
+# Define route for viewing student's grades
+@app.route("/student_grades")
+def student_grades():
+    """
+    Display all grades received by the logged-in student for assignments.
+    
+    Shows a list of all grades with feedback from teachers.
+    
+    Returns:
+        Rendered student_grades template with grade information
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Check if user is a student
+    if session.get('role') != 'student':
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Fetch all grades for this student
+        cursor.execute("""
+            SELECT 
+                g.id,
+                g.grade,
+                g.feedback,
+                g.graded_at,
+                a.title as assignment_title,
+                a.id as assignment_id,
+                c.title as course_title,
+                u.full_name as teacher_name
+            FROM grades g
+            JOIN assignments a ON g.assignment_id = a.id
+            JOIN courses c ON a.course_id = c.id
+            JOIN users u ON g.teacher_id = u.id
+            WHERE g.student_id = ?
+            ORDER BY g.graded_at DESC
+        """, (session['user_id'],))
+        
+        grades = cursor.fetchall()
+        
+        # Calculate statistics
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_graded,
+                AVG(grade) as average_grade
+            FROM grades
+            WHERE student_id = ?
+        """, (session['user_id'],))
+        
+        stats = cursor.fetchone()
+        total_graded = stats['total_graded'] if stats['total_graded'] else 0
+        average_grade = round(stats['average_grade'], 2) if stats['average_grade'] else 0
+        
+        conn.close()
+        
+        return render_template('student_grades.html',
+                             grades=grades,
+                             total_graded=total_graded,
+                             average_grade=average_grade)
+    
+    except Exception as e:
+        return render_template('error.html', error=f'Error loading grades: {str(e)}')
+
+
+# Define route for viewing notifications
+@app.route("/notifications")
+def notifications():
+    """
+    Display notifications:
+    - For students: Show notifications they've received from teachers
+    - For teachers: Show notifications they've sent to students
+    
+    Returns:
+        Rendered notifications page
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user_role = session.get('role')
+    user_id = session['user_id']
+    
+    # Reject unauthorized users
+    if user_role not in ['student', 'teacher']:
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        if user_role == 'student':
+            # For students: Show notifications they've received
+            cursor.execute("""
+                SELECT n.*, c.title as course_title
+                FROM notifications n
+                LEFT JOIN courses c ON n.course_id = c.id
+                WHERE n.student_id = ?
+                ORDER BY n.created_at DESC
+            """, (user_id,))
+            
+            all_notifications = cursor.fetchall()
+            
+            # Count unread notifications
+            cursor.execute("""
+                SELECT COUNT(*) as unread_count
+                FROM notifications
+                WHERE student_id = ? AND is_read = 0
+            """, (user_id,))
+            
+            unread_count = cursor.fetchone()['unread_count']
+            
+        else:  # teacher
+            # For teachers: Show notifications they've sent (from their courses)
+            cursor.execute("""
+                SELECT n.*, c.title as course_title, u.full_name as student_name
+                FROM notifications n
+                LEFT JOIN courses c ON n.course_id = c.id
+                LEFT JOIN users u ON n.student_id = u.id
+                WHERE c.teacher_id = ?
+                ORDER BY n.created_at DESC
+            """, (user_id,))
+            
+            all_notifications = cursor.fetchall()
+            
+            # Count total notifications sent
+            cursor.execute("""
+                SELECT COUNT(*) as unread_count
+                FROM notifications n
+                LEFT JOIN courses c ON n.course_id = c.id
+                WHERE c.teacher_id = ?
+            """, (user_id,))
+            
+            unread_count = cursor.fetchone()['unread_count']
+        
+        conn.close()
+        
+        return render_template('notifications.html',
+                             notifications=all_notifications,
+                             unread_count=unread_count,
+                             user_role=user_role)
+    
+    except Exception as e:
+        print(f"Error loading notifications: {str(e)}")
+        return render_template('error.html', error=f'Error loading notifications: {str(e)}')
+
+
+# Define route for marking notification as read
+@app.route("/mark_notification_read/<int:notification_id>")
+def mark_notification_read(notification_id):
+    """
+    Mark a notification as read.
+    
+    Args:
+        notification_id (int): ID of the notification to mark as read
+    
+    Returns:
+        Redirect back to notifications page
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Verify the notification belongs to the user
+        cursor.execute("""
+            SELECT id FROM notifications WHERE id = ? AND student_id = ?
+        """, (notification_id, session['user_id']))
+        
+        if not cursor.fetchone():
+            conn.close()
+            return redirect(url_for('notifications'))
+        
+        # Mark as read
+        cursor.execute("""
+            UPDATE notifications SET is_read = 1 WHERE id = ?
+        """, (notification_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return redirect(url_for('notifications'))
+    
+    except Exception as e:
+        return redirect(url_for('notifications'))
+
+
+# Define route to clear all notifications
+@app.route("/clear_all_notifications", methods=['POST'])
+def clear_all_notifications():
+    """
+    Mark all notifications as read for the student.
+    
+    Returns:
+        Redirect back to notifications page
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Mark all notifications as read
+        cursor.execute("""
+            UPDATE notifications SET is_read = 1 WHERE student_id = ? AND is_read = 0
+        """, (session['user_id'],))
+        
+        conn.commit()
+        conn.close()
+        
+        return redirect(url_for('notifications'))
+    
+    except Exception as e:
+        return redirect(url_for('notifications'))
+
+
+# Define route for getting course comments (AJAX)
+@app.route("/api/get_comments/<int:course_id>")
+def get_comments(course_id):
+    """
+    Get all comments for a specific course (for AJAX requests).
+    
+    Args:
+        course_id (int): ID of the course
+    
+    Returns:
+        JSON response with list of comments
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        user_role = session.get('role')
+        user_id = session['user_id']
+        
+        # If course_id is 0, it's a global discussion - all logged-in users can access
+        if course_id != 0:
+            # Verify user is enrolled in the course (if student) or is the teacher
+            if user_role == 'student':
+                cursor.execute("""
+                    SELECT id FROM enrollments 
+                    WHERE student_id = ? AND course_id = ?
+                """, (user_id, course_id))
+                
+                if not cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': 'Not enrolled in this course'}), 403
+            elif user_role == 'teacher':
+                cursor.execute("""
+                    SELECT id FROM courses WHERE id = ? AND teacher_id = ?
+                """, (course_id, user_id))
+                
+                if not cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': 'Not authorized'}), 403
+        
+        # Get all comments for the course
+        cursor.execute("""
+            SELECT c.id, c.message, c.created_at, u.full_name, u.username
+            FROM comments c
+            JOIN users u ON c.user_id = u.id
+            WHERE c.course_id = ?
+            ORDER BY c.created_at DESC
+        """, (course_id,))
+        
+        comments_data = cursor.fetchall()
+        conn.close()
+        
+        # Convert to list of dictionaries
+        comments_list = []
+        for comment in comments_data:
+            comments_list.append({
+                'id': comment['id'],
+                'message': comment['message'],
+                'created_at': comment['created_at'],
+                'full_name': comment['full_name'],
+                'username': comment['username']
+            })
+        
+        return jsonify({'success': True, 'comments': comments_list})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# Define route for posting a comment
+@app.route("/api/post_comment/<int:course_id>", methods=['POST'])
+def post_comment(course_id):
+    """
+    Post a new comment to a course discussion.
+    
+    Args:
+        course_id (int): ID of the course
+    
+    Returns:
+        JSON response with success status and new comment details
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        message = request.form.get('message', '').strip()
+        
+        # Validate message
+        if not message:
+            return jsonify({'error': 'Message cannot be empty'}), 400
+        
+        if len(message) > 5000:
+            return jsonify({'error': 'Message is too long (max 5000 characters)'}), 400
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        user_id = session['user_id']
+        user_role = session.get('role')
+        
+        # If course_id is 0, it's a global discussion - all logged-in users can post
+        if course_id != 0:
+            # Verify user is enrolled in the course (if student) or is the teacher
+            if user_role == 'student':
+                cursor.execute("""
+                    SELECT id FROM enrollments 
+                    WHERE student_id = ? AND course_id = ?
+                """, (user_id, course_id))
+                
+                if not cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': 'Not enrolled in this course'}), 403
+            elif user_role == 'teacher':
+                cursor.execute("""
+                    SELECT id FROM courses WHERE id = ? AND teacher_id = ?
+                """, (course_id, user_id))
+                
+                if not cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': 'Not authorized'}), 403
+        
+        # Insert the new comment
+        cursor.execute("""
+            INSERT INTO comments (user_id, course_id, message)
+            VALUES (?, ?, ?)
+        """, (user_id, course_id, message))
+        
+        conn.commit()
+        comment_id = cursor.lastrowid
+        
+        # Get the comment details with user info
+        cursor.execute("""
+            SELECT c.id, c.message, c.created_at, u.full_name, u.username
+            FROM comments c
+            JOIN users u ON c.user_id = u.id
+            WHERE c.id = ?
+        """, (comment_id,))
+        
+        comment = cursor.fetchone()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'comment': {
+                'id': comment['id'],
+                'message': comment['message'],
+                'created_at': comment['created_at'],
+                'full_name': comment['full_name'],
+                'username': comment['username']
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# Define route for deleting a comment
+@app.route("/api/delete_comment/<int:comment_id>", methods=['POST'])
+def delete_comment(comment_id):
+    """
+    Delete a comment from a course discussion.
+    
+    Args:
+        comment_id (int): ID of the comment to delete
+    
+    Returns:
+        JSON response with success status
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get the comment and verify the user owns it
+        cursor.execute("""
+            SELECT id, user_id FROM comments WHERE id = ?
+        """, (comment_id,))
+        
+        comment = cursor.fetchone()
+        
+        if not comment:
+            conn.close()
+            return jsonify({'error': 'Comment not found'}), 404
+        
+        # Only the comment author can delete it
+        if comment['user_id'] != session['user_id']:
+            conn.close()
+            return jsonify({'error': 'Not authorized to delete this comment'}), 403
+        
+        # Delete the comment
+        cursor.execute("""
+            DELETE FROM comments WHERE id = ?
+        """, (comment_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # Define error handler for 404 Not Found

@@ -12,6 +12,12 @@
         </div>
     {% endif %}
     
+    {% if welcome %}
+        <div style="background:#e8f6ff;border:1px solid #cfeeff;padding:12px;border-radius:8px;margin:12px 0;">
+            ✅ {{ welcome }} <a href="{{ url_for('create_course') }}" style="margin-left:8px; font-weight:600;">Create a course</a>
+        </div>
+    {% endif %}
+    
     <div class="grid mt-30">
         <div class="card">
             <div class="card-header">📚 Total Courses</div>
@@ -52,6 +58,7 @@
                             <div style="display: flex; gap: 10px; margin-top: 15px;">
                                 <a href="{{ url_for('manage_course', course_id=course.id) }}" class="btn btn-primary" style="flex: 1; text-align: center;">Manage</a>
                                 <a href="{{ url_for('manage_course', course_id=course.id) }}" class="btn btn-secondary" style="flex: 1; text-align: center;">Edit</a>
+                                <a href="{{ url_for('create_assignment', course_id=course.id) }}" class="btn btn-tertiary" style="flex: 1; text-align: center;">+ Create Assignment</a>
                             </div>
                         </div>
                     </div>
@@ -61,10 +68,37 @@
             <p class="text-muted">You haven't created any courses yet.</p>
         {% endif %}
         
-        <a href="{{ url_for('create_course') }}" class="btn btn-primary mt-30">+ Create New Course</a>
+        <div id="create-assignment" style="display: flex; gap: 10px; align-items: center; margin-top: 20px;">
+            <a href="{{ url_for('create_course') }}" class="btn btn-primary">+ Create New Course</a>
+            {% if my_courses %}
+                <form id="createAssignmentForm" style="display: flex; gap: 8px; align-items: center;">
+                    <select id="assignmentCourseSelect" style="padding: 8px 10px; border-radius:6px; border:1px solid var(--border-color);">
+                        {% for course in my_courses %}
+                            <option value="{{ course.id }}">{{ course.title }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" id="createAssignmentBtn" class="btn btn-secondary">+ Create Assignment</button>
+                </form>
+            {% else %}
+                <span style="color: var(--medium-text);">Create a course first to add assignments.</span>
+            {% endif %}
+        </div>
     </div>
     
     <div style="margin-top: 30px; text-align: right;">
         <a href="{{ url_for('logout') }}" class="btn btn-outline">Logout</a>
     </div>
+    <script>
+        // Redirect to create_assignment for selected course
+        const createBtn = document.getElementById('createAssignmentBtn');
+        if (createBtn) {
+            createBtn.addEventListener('click', function() {
+                const sel = document.getElementById('assignmentCourseSelect');
+                if (sel && sel.value) {
+                    const courseId = sel.value;
+                    window.location.href = `{{ url_for('create_assignment', course_id=0) }}`.replace('/0', `/${courseId}`);
+                }
+            });
+        }
+    </script>
 {% endblock %}
