@@ -1,0 +1,615 @@
+================================================================================
+                    LMS (Learning Management System)
+                          ARCHITECTURE DOCUMENT
+================================================================================
+
+1. PROJECT OVERVIEW
+================================================================================
+The LMS is a comprehensive web-based Learning Management System built with Flask,
+enabling educators to create courses, manage lessons, and track student progress,
+while allowing students to enroll in courses, complete assignments, and view grades.
+
+Technology Stack:
+  - Backend Framework: Flask (Python web framework)
+  - Database: SQLite (local relational database)
+  - Frontend: HTML5, CSS, Jinja2 templating
+  - Server: Flask development/production server
+  - Session Management: Flask sessions with secret key encryption
+
+
+2. PROJECT STRUCTURE
+================================================================================
+LMS_Project_Francesco/
+│
+├── app.py                          # Main Flask application entry poiWnt
+├── lms.db                          # SQLite database file (automatically created)
+├── requirements.txt                # Python dependencies (Flask, Werkzeug)
+├── readme.md                       # Project documentation
+│
+├── templates/                      # HTML template files (24 templates)
+│   ├── base.html                   # Base template for layout/styling
+│   ├── home.html                   # Landing/homepage
+│   ├── login.html                  # User login form
+│   ├── register.html               # User registration form
+│   ├── error.html                  # Error page
+│   │
+│   ├── Student Views:
+│   │   ├── student_dashboard.html  # Student main dashboard
+│   │   ├── my_assignments.html     # View student's assignments
+│   │   ├── student_grades.html     # View student's grades and feedback
+│   │   ├── learn_course.html       # View enrolled courses
+│   │   ├── lesson_detail.html      # View detailed lesson content
+│   │   ├── notifications.html      # View student notifications
+│   │   └── assignment_results.html # View assignment submission results
+│   │
+│   ├── Teacher Views:
+│   │   ├── teacher_dashboard.html  # Teacher main dashboard
+│   │   ├── create_course.html      # Create new course form
+│   │   ├── manage_course.html      # Manage existing courses
+│   │   ├── create_lesson.html      # Create lesson/topic form
+│   │   ├── edit_lesson.html        # Edit existing lesson
+│   │   ├── create_assignment.html  # Create assignment questions (MCQ)
+│   │   ├── grade_assignment.html   # View submissions for grading
+│   │   ├── grade_submission.html   # Grade individual submissions
+│   │   ├── mark_attendance.html    # Mark student attendance
+│   │   ├── attendance_report.html  # View attendance history
+│   │   ├── assignments.html        # View all assignments created
+│   │   ├── lessons.html            # View all lessons created
+│   │   └── course.html             # View course details
+│   │
+│   ├── Admin Views:
+│   │   └── admin_dashboard.html    # Admin dashboard (system management)
+│   │
+│   └── Other:
+│       └── notifications.html      # Notification display
+
+├── static/                         # Static assets
+│   ├── style.css                   # Main stylesheet
+│   ├── css/                        # CSS directory
+│   │   └── style/                  # Additional stylesheets
+│   └── images/                     # Image assets
+
+├── scripts/                        # Utility scripts and database setup
+│   ├── admin_setup.py              # Setup administrator accounts
+│   ├── assignments_table.py        # Assignment database operations
+│   ├── content_management.py       # Content management utilities
+│   ├── course_table.py             # Course database operations
+│   ├── lessons.py                  # Lesson/topic operations
+│   ├── msq_table.py                # Multiple-choice question operations
+│   ├── topic_table.py              # Topic database operations
+│   ├── users_database.py           # User database operations
+│   ├── main.py                     # Database initialization script
+│   └── practice/                   # Practice/test scripts
+│       ├── table1_data_inserter.py
+│       ├── table1_maker.py
+│       ├── table2_inserter.ipynb
+│       ├── table3_maker.py
+│       └── ... (other test files)
+
+├── stapp/                          # Streamlit alternative application
+│   └── streamlit_app.py            # Streamlit version of LMS
+
+└── Configuration Files:
+    ├── COMPLETION_CHECKLIST.md     # Feature completion status
+    ├── PROJECT_COMPLETE.md         # Project completion notes
+    └── (Various status and report files)
+
+
+3. DATABASE SCHEMA
+================================================================================
+
+TABLE: users
+  - id (INTEGER, PRIMARY KEY, AUTO-INCREMENT)
+  - username (TEXT, NOT NULL, UNIQUE)
+  - email (TEXT, NOT NULL, UNIQUE)
+  - password (TEXT, NOT NULL, SHA256-hashed)
+  - full_name (TEXT, NOT NULL)
+  - role (TEXT, DEFAULT 'student') - Values: 'student', 'teacher', 'admin'
+  - created_at (TIMESTAMP, AUTO)
+  - last_login (TIMESTAMP)
+  
+  Purpose: Store user account information
+
+TABLE: courses
+  - id (INTEGER, PRIMARY KEY, AUTO-INCREMENT)
+  - course_id (INTEGER)
+  - title (TEXT, NOT NULL, UNIQUE)
+  - description (TEXT)
+  - course_type (TEXT, DEFAULT 'Self-Paced') 
+    Values: 'Self-Paced', 'Instructor-Led', 'Hybrid', 'Workshop'
+  - duration (TEXT, DEFAULT 'Flexible')
+  - level (TEXT, DEFAULT 'Beginner')
+    Values: 'Beginner', 'Intermediate', 'Advanced', 'Expert'
+  - teacher_id (INTEGER, FOREIGN KEY -> users(id))
+  - created_at (TIMESTAMP, AUTO)
+  
+  Purpose: Store course information and metadata
+
+TABLE: topics (lessons)
+  - id (INTEGER, PRIMARY KEY, AUTO-INCREMENT)
+  - course_id (INTEGER, NOT NULL, FOREIGN KEY -> courses(id))
+  - title (TEXT, UNIQUE)
+  - subtitle (TEXT)
+  - content (TEXT) - Main lesson body/content
+  - created_at (TIMESTAMP, AUTO)
+  
+  Purpose: Store lesson topics/chapters within courses
+
+TABLE: msqs (Multiple-choice Questions)
+  - id (INTEGER, PRIMARY KEY, AUTO-INCREMENT)
+  - topic_id (INTEGER, NOT NULL, FOREIGN KEY -> topics(id))
+  - question (TEXT, NOT NULL)
+  - option_a (TEXT, NOT NULL)
+  - option_b (TEXT, NOT NULL)
+  - option_c (TEXT, NOT NULL)
+  - option_d (TEXT, NOT NULL)
+  - correct_answer (TEXT, NOT NULL) - Values: 'a', 'b', 'c', 'd'
+  - created_at (TIMESTAMP, AUTO)
+  
+  Purpose: Store multiple-choice questions for assignments
+
+TABLE: enrollments
+  - id (INTEGER, PRIMARY KEY, AUTO-INCREMENT)
+  - student_id (INTEGER, NOT NULL, FOREIGN KEY -> users(id))
+  - course_id (INTEGER, NOT NULL, FOREIGN KEY -> courses(id))
+  - progress (INTEGER, DEFAULT 0) - Progress percentage (0-100)
+  - enrolled_at (TIMESTAMP, AUTO)
+  - UNIQUE(student_id, course_id) - Each student enrolls once per course
+  
+  Purpose: Track student enrollment in courses
+
+TABLE: submissions
+  - id (INTEGER, PRIMARY KEY, AUTO-INCREMENT)
+  - student_id (INTEGER, NOT NULL, FOREIGN KEY -> users(id))
+  - question_id (INTEGER, NOT NULL, FOREIGN KEY -> msqs(id))
+  - selected_answer (TEXT, NOT NULL) - Values: 'a', 'b', 'c', 'd'
+  - is_correct (INTEGER, DEFAULT 0) - 1 for correct, 0 for incorrect
+  - submitted_at (TIMESTAMP, AUTO)
+  
+  Purpose: Store student quiz/assignment submissions and answers
+
+TABLE: attendance
+  - id (INTEGER, PRIMARY KEY, AUTO-INCREMENT)
+  - student_id (INTEGER, NOT NULL, FOREIGN KEY -> users(id))
+  - lesson_id (INTEGER, NOT NULL, FOREIGN KEY -> topics(id))
+  - course_id (INTEGER, NOT NULL, FOREIGN KEY -> courses(id))
+  - status (TEXT, DEFAULT 'absent') - Values: 'present', 'absent', 'late'
+  - lesson_date (TIMESTAMP, AUTO)
+  - recorded_at (TIMESTAMP, AUTO)
+  
+  Purpose: Track student attendance for lessons
+
+TABLE: notifications
+  - id (INTEGER, PRIMARY KEY, AUTO-INCREMENT)
+  - student_id (INTEGER, NOT NULL, FOREIGN KEY -> users(id))
+  - course_id (INTEGER, NOT NULL, FOREIGN KEY -> courses(id))
+  - notification_type (TEXT, NOT NULL) - Values: 'lesson', 'assignment'
+  - title (TEXT, NOT NULL)
+  - message (TEXT)
+  - resource_id (INTEGER) - Link to lesson_id or assignment_id
+  - is_read (INTEGER, DEFAULT 0)
+  - created_at (TIMESTAMP, AUTO)
+  
+  Purpose: Notify students of new lessons, assignments, and updates
+
+TABLE: grades
+  - id (INTEGER, PRIMARY KEY, AUTO-INCREMENT)
+  - student_id (INTEGER, NOT NULL, FOREIGN KEY -> users(id))
+  - assignment_id (INTEGER, NOT NULL, FOREIGN KEY -> assignments(id))
+  - teacher_id (INTEGER, NOT NULL, FOREIGN KEY -> users(id))
+  - grade (REAL) - Numeric grade (0-100)
+  - feedback (TEXT) - Teacher's comments/feedback
+  - graded_at (TIMESTAMP, AUTO)
+  - updated_at (TIMESTAMP)
+  
+  Purpose: Store assignment grades and teacher feedback
+
+TABLE: comments
+  - id (INTEGER, PRIMARY KEY, AUTO-INCREMENT)
+  - user_id (INTEGER, NOT NULL, FOREIGN KEY -> users(id))
+  - course_id (INTEGER, NOT NULL, FOREIGN KEY -> courses(id))
+  - message (TEXT, NOT NULL)
+  - created_at (TIMESTAMP, AUTO)
+  
+  Purpose: Course discussions and student-teacher interactions
+
+
+4. CORE COMPONENTS & FUNCTIONALITY
+================================================================================
+
+4.1 AUTHENTICATION & AUTHORIZATION
+-----------------------------------
+Files: app.py (main authentication logic)
+
+Components:
+  - Session Management: Flask sessions with SECRET_KEY encryption
+  - Password Security: SHA256 hashing for password storage
+  - User Roles: student, teacher, admin
+  - Route Protection: @login_required decorators on protected routes
+
+Key Functions:
+  - hash_password(password): Hash user passwords securely
+  - get_db_connection(db_name): Establish database connection with Row factory
+  - init_db(): Initialize all database tables on first run
+
+4.2 COURSE MANAGEMENT
+-----------------------------------
+Files: app.py, scripts/course_table.py
+
+Teacher Capabilities:
+  - Create new courses (with type, duration, level, description)
+  - Edit course details
+  - Manage course content and structure
+  - View enrolled students
+  - Track course progress
+
+Student Capabilities:
+  - Browse available courses
+  - Enroll in courses
+  - Track personal progress
+  - View enrolled courses
+
+Database: courses, enrollments tables
+
+4.3 CONTENT MANAGEMENT (LESSONS/TOPICS)
+-----------------------------------
+Files: app.py, scripts/topic_table.py
+
+Teacher Capabilities:
+  - Create lessons within courses
+  - Edit lesson content and topics
+  - Create multiple-choice quiz questions
+  - Delete lessons
+  - Structure course material
+
+Student Capabilities:
+  - View lesson content
+  - Read lesson materials
+  - Take quiz/assignments
+
+Database: topics (lessons), msqs (questions) tables
+
+4.4 ASSIGNMENT & GRADING SYSTEM
+-----------------------------------
+Files: app.py, scripts/assignments_table.py, scripts/msq_table.py
+
+Teacher Capabilities:
+  - Create assignment questions (MCQ format)
+  - View student submissions
+  - Grade submissions with feedback
+  - Provide feedback comments
+  - View assignment statistics
+
+Student Capabilities:
+  - View available assignments
+  - Submit answers to questions
+  - View results and grades
+  - See teacher feedback
+
+Database: msqs, submissions, grades tables
+
+4.5 ATTENDANCE TRACKING
+-----------------------------------
+Files: app.py
+
+Teacher Capabilities:
+  - Mark student attendance for lessons
+  - Record attendance status (present, absent, late)
+  - View attendance reports
+  - Generate attendance statistics
+
+Student Capabilities:
+  - View own attendance record
+
+Database: attendance table
+
+4.6 NOTIFICATION SYSTEM
+-----------------------------------
+Files: app.py
+
+Features:
+  - Notify students when new lessons are created
+  - Alert students about new assignments
+  - Mark notifications as read/unread
+  - Display unread notification count
+
+Database: notifications table
+
+4.7 DISCUSSION/COMMENTS SYSTEM
+-----------------------------------
+Files: app.py
+
+Features:
+  - Students can post comments on courses
+  - Teachers can respond to student comments
+  - Build course community and discussion
+  - Thread-like interaction
+
+Database: comments table
+
+
+5. API ROUTES & ENDPOINTS
+================================================================================
+
+5.1 AUTHENTICATION ROUTES
+-----------------------------------
+GET/POST /register        - User registration (student/teacher)
+GET/POST /login           - User login
+GET      /logout          - User logout
+
+5.2 DASHBOARD ROUTES
+-----------------------------------
+GET      /student_dashboard    - Student main dashboard view
+GET      /teacher_dashboard    - Teacher main dashboard view
+GET      /admin_dashboard      - Admin management dashboard
+GET      /                     - Home page with statistics
+
+5.3 COURSE MANAGEMENT ROUTES
+-----------------------------------
+GET/POST /create_course         - Create new course
+GET/POST /manage_course/<id>    - Manage existing course
+GET      /course                - View course list/details
+GET      /learn/<course_id>     - Enroll and view course content
+GET      /enroll/<course_id>    - Enroll student in course
+
+5.4 LESSON/CONTENT ROUTES
+-----------------------------------
+GET/POST /create_lesson/<course_id>     - Create lesson
+GET/POST /edit_lesson/<lesson_id>       - Edit lesson
+POST     /delete_lesson/<lesson_id>     - Delete lesson
+GET      /lessons                       - View all lessons
+GET      /lesson/<lesson_id>            - View lesson detail page
+
+5.5 ASSIGNMENT ROUTES
+-----------------------------------
+GET/POST /create_assignment/<course_id> - Create assignment questions
+GET      /assignments                   - View assignments list
+POST     /delete_assignment/<id>        - Delete assignment
+GET      /grade_assignment/<id>         - View submissions for grading
+POST     /grade_submission/<id>         - Submit grade and feedback
+
+5.6 STUDENT ACTIVITY ROUTES
+-----------------------------------
+GET      /my_assignments         - View student's assignments
+GET      /student_grades         - View grades and feedback
+GET      /assignment_results     - View submission results
+GET      /notifications          - View student notifications
+
+5.7 ATTENDANCE ROUTES
+-----------------------------------
+GET/POST /mark_attendance/<lesson_id>  - Mark attendance
+GET      /attendance_report             - View attendance report
+
+
+6. DATA FLOW & USER INTERACTIONS
+================================================================================
+
+6.1 STUDENT ENROLLMENT & LEARNING FLOW
+-----------------------------------
+1. Student registers account (role='student')
+2. Student logs in with credentials
+3. Student browses available courses
+4. Student enrolls in course (creates enrollment record)
+5. Student accesses course (learn_course view)
+6. Student views lessons and reads content
+7. Student completes quiz questions (submissions)
+8. System records answers and evaluates correctness
+9. Teacher grades submissions and provides feedback
+10. Student views grades and feedback in dashboard
+11. Notifications alert student of new content
+
+6.2 TEACHER COURSE CREATION FLOW
+-----------------------------------
+1. Teacher registers account (role='teacher')
+2. Teacher logs in
+3. Teacher creates new course (with metadata)
+4. Teacher creates lessons/topics within course
+5. Teacher creates quiz questions (MCQ format)
+6. Teacher publishes course content
+7. Students can now enroll in course
+8. Teacher views enrolled students
+9. Teacher reviews student submissions
+10. Teacher grades submissions with feedback
+11. Teacher marks attendance
+12. Teacher tracks course statistics
+
+6.3 ADMINISTRATIVE FLOW
+-----------------------------------
+1. Admin accesses admin_dashboard
+2. Admin manages system statistics
+3. Admin can create user accounts
+4. Admin monitors system health
+5. Admin generates reports
+
+
+7. SECURITY FEATURES
+================================================================================
+
+- Password Hashing: SHA256 algorithm for secure password storage
+- Session Management: Flask session encryption with SECRET_KEY
+- Input Validation: Request validation in forms
+- Database Security: Parameterized queries to prevent SQL injection
+- Role-Based Access Control: Routes check user role (student/teacher/admin)
+- HTTPS Ready: Structure supports HTTPS deployment
+
+Note: Production deployment should use:
+  - Environment variables for SECRET_KEY
+  - HTTPS/SSL certificates
+  - Production database (PostgreSQL, MySQL)
+  - Web server (Gunicorn, uWSGI)
+
+
+8. KEY TECHNOLOGIES & LIBRARIES
+================================================================================
+
+Backend:
+  - Flask 2.3.3: Web framework for HTTP routing and request handling
+  - Werkzeug 2.3.7: WSGI utilities for Flask
+  
+Built-in Libraries:
+  - sqlite3: Database operations and schema management
+  - hashlib: Password hashing with SHA256
+  - os: Environment variable management
+  
+Frontend:
+  - HTML5: Markup and semantic structure
+  - CSS3: Styling and responsive design
+  - Jinja2: Template engine (Flask default)
+
+
+9. FILE ORGANIZATION & SEPARATION OF CONCERNS
+================================================================================
+
+Main Application Logic:
+  - app.py: Central Flask application with all routes and business logic
+
+Database Layer:
+  - scripts/: Database table creation and data insertion scripts
+  - lms.db: SQLite database file
+
+Presentation Layer:
+  - templates/: HTML templates organized by user role
+  - static/: CSS styling and images
+
+Configuration:
+  - requirements.txt: Python dependencies
+  - init_db(): Database initialization in app.py
+
+
+10. WORKFLOW & DEPLOYMENT NOTES
+================================================================================
+
+Initialization:
+  1. Run 'pip install -r requirements.txt' to install Flask and dependencies
+  2. Run 'python app.py' to start the development server
+  3. Database tables are automatically created on first run
+  4. Application available at http://localhost:5000
+
+Project Status:
+  - Core features complete (course management, lessons, assignments, grades)
+  - Attendance tracking implemented
+  - Notification system in place
+  - User authentication and authorization working
+  - Role-based dashboards for students, teachers, admins
+
+Future Enhancements:
+  - WebSocket support for real-time notifications
+  - File upload for lesson attachments
+  - Video content support
+  - Discussion forums extended functionality
+  - Mobile app integration
+  - Analytics and advanced reporting
+  - Integration with third-party auth (OAuth2)
+
+
+11. ARCHITECTURE DIAGRAM
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────┐
+│                         CLIENT LAYER                            │
+│         (HTML Templates, CSS, Jinja2 Templating)               │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                    HTTP Requests
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    APPLICATION LAYER                            │
+│                         (Flask)                                 │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Route Handlers (@app.route decorators)                 │  │
+│  │  - Authentication (register, login, logout)             │  │
+│  │  - Course Management (create, edit, manage)             │  │
+│  │  - Content Management (lessons, topics)                 │  │
+│  │  - Assignment & Grading (create, submit, grade)        │  │
+│  │  - Attendance (mark, report)                            │  │
+│  │  - Notifications (create, retrieve)                     │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                         │                                       │
+│         ┌───────────────┼───────────────┐                       │
+│         │               │               │                       │
+│         ▼               ▼               ▼                       │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐           │
+│  │ Business     │ │ Database     │ │ Session      │           │
+│  │ Logic        │ │ Operations   │ │ Management   │           │
+│  │ - Password   │ │ - get_db_    │ │ - User auth  │           │
+│  │ - Enrollment │ │   connection │ │ - Encryption │           │
+│  │ - Grading    │ │ - Queries    │ │              │           │
+│  └──────────────┘ └──────────────┘ └──────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
+                         │
+                    SQL Queries
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      DATA LAYER                                 │
+│                    SQLite Database                              │
+│                      (lms.db)                                   │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Tables:                                                 │  │
+│  │  ├─ users (authentication, profiles)                    │  │
+│  │  ├─ courses (course metadata)                           │  │
+│  │  ├─ topics (lessons/chapters)                           │  │
+│  │  ├─ msqs (quiz questions)                              │  │
+│  │  ├─ enrollments (student course enrollments)            │  │
+│  │  ├─ submissions (student quiz answers)                  │  │
+│  │  ├─ attendance (lesson attendance records)              │  │
+│  │  ├─ notifications (system notifications)                │  │
+│  │  ├─ grades (assignment grades & feedback)               │  │
+│  │  └─ comments (course discussions)                       │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+
+
+12. USER ROLES & PERMISSIONS MATRIX
+================================================================================
+
+STUDENT:
+  ✓ Register and login
+  ✓ Browse courses
+  ✓ Enroll in courses
+  ✓ View enrolled courses
+  ✓ Read lesson content
+  ✓ Complete quiz questions
+  ✓ View grades and feedback
+  ✓ View personal progress
+  ✓ View attendance record
+  ✓ Post comments/discussion
+  ✓ Receive notifications
+  ✗ Create courses
+  ✗ Delete content
+  ✗ Grade assignments
+  ✗ Mark attendance
+
+TEACHER:
+  ✓ Register and login
+  ✓ Create courses
+  ✓ Manage own courses
+  ✓ Create lessons
+  ✓ Create quiz questions
+  ✓ Edit lesson content
+  ✓ Delete lessons
+  ✓ View enrolled students
+  ✓ Grade submissions
+  ✓ Provide feedback
+  ✓ Mark attendance
+  ✓ View attendance reports
+  ✓ View course statistics
+  ✓ View discussion comments
+  ✗ Delete other courses
+  ✗ Access admin dashboard
+
+ADMIN:
+  ✓ All teacher functions
+  ✓ All student functions (read-only)
+  ✓ Access admin dashboard
+  ✓ View system statistics
+  ✓ Manage user accounts
+  ✓ Monitor system health
+  ✗ Grade student work (unless teacher)
+
+================================================================================
+                            END OF ARCHITECTURE
+================================================================================

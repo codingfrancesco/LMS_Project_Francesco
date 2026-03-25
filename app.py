@@ -6,6 +6,8 @@ import sqlite3
 import hashlib
 # Import os for secret key generation
 import os
+# Import contextmanager for safe database connection handling
+from contextlib import contextmanager
 
 # Initialize Flask application
 app = Flask(__name__)
@@ -13,8 +15,32 @@ app = Flask(__name__)
 # This ensures user sessions are secure and cannot be tampered with
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# Function to establish database connection
-def get_db_connection(db_name="lms.db"):
+# Context manager for database connections
+from contextlib import contextmanager
+
+@contextmanager
+def get_db():
+    """
+    Context manager for safe database connection handling.
+    Ensures connection is always closed, even if an error occurs.
+    
+    Usage:
+        with get_db() as cursor:
+            cursor.execute(...)
+    
+    Yields:
+        sqlite3.Cursor: Database cursor object
+    """
+    conn = sqlite3.connect("lms.db")
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn.cursor()
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
     """
     Connect to the SQLite database and return connection object.
     
@@ -61,282 +87,283 @@ def init_db():
     """
     # Establish connection to the database
     conn = get_db_connection()
-    # Create cursor object to execute SQL commands
     cursor = conn.cursor()
     
-    # Create users table for storing user account information
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            -- Unique identifier for each user (auto-incrementing primary key)
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            -- Username must be unique (no two users can have same username)
-            username TEXT NOT NULL UNIQUE,
-            -- Email must be unique (no two users can have same email)
-            email TEXT NOT NULL UNIQUE,
-            -- Password stored as hashed string (never plain text)
-            password TEXT NOT NULL,
-            -- Full name of the user
-            full_name TEXT NOT NULL,
-            -- User role: either 'student' or 'teacher'
-            role TEXT NOT NULL DEFAULT 'student',
-            -- Timestamp when account was created (automatic)
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Timestamp of last login
-            last_login TIMESTAMP
-        )
-    """)
-    
-    # Create courses table for storing course information
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS courses (
-            -- Unique identifier for each course
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            -- Unique course ID number
-            course_id INTEGER,
-            -- Course title (must be unique)
-            title TEXT NOT NULL UNIQUE,
-            -- Description of what the course covers
-            description TEXT,
-            -- Type of course (Self-Paced, Instructor-Led, Hybrid, Workshop)
-            course_type TEXT DEFAULT 'Self-Paced',
-            -- Duration of the course (e.g., "4 weeks", "20 hours")
-            duration TEXT DEFAULT 'Flexible',
-            -- Difficulty level (Beginner, Intermediate, Advanced, Expert)
-            level TEXT DEFAULT 'Beginner',
-            -- ID of the teacher who created this course
-            teacher_id INTEGER,
-            -- Timestamp when course was created
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Foreign key linking to the teacher user
-            FOREIGN KEY (teacher_id) REFERENCES users(id)
-        )
-    """)
-
-    # Migration: ensure `courses` table has expected columns when upgrading from older schema
     try:
-        cursor.execute("PRAGMA table_info(courses)")
-        existing_cols = [row['name'] for row in cursor.fetchall()]
+        # Create users table for storing user account information
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                -- Unique identifier for each user (auto-incrementing primary key)
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- Username must be unique (no two users can have same username)
+                username TEXT NOT NULL UNIQUE,
+                -- Email must be unique (no two users can have same email)
+                email TEXT NOT NULL UNIQUE,
+                -- Password stored as hashed string (never plain text)
+                password TEXT NOT NULL,
+                -- Full name of the user
+                full_name TEXT NOT NULL,
+                -- User role: either 'student' or 'teacher'
+                role TEXT NOT NULL DEFAULT 'student',
+                -- Timestamp when account was created (automatic)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Timestamp of last login
+                last_login TIMESTAMP
+            )
+        """)
+        
+        # Create courses table for storing course information
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS courses (
+                -- Unique identifier for each course
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- Unique course ID number
+                course_id INTEGER,
+                -- Course title (must be unique)
+                title TEXT NOT NULL UNIQUE,
+                -- Description of what the course covers
+                description TEXT,
+                -- Type of course (Self-Paced, Instructor-Led, Hybrid, Workshop)
+                course_type TEXT DEFAULT 'Self-Paced',
+                -- Duration of the course (e.g., "4 weeks", "20 hours")
+                duration TEXT DEFAULT 'Flexible',
+                -- Difficulty level (Beginner, Intermediate, Advanced, Expert)
+                level TEXT DEFAULT 'Beginner',
+                -- ID of the teacher who created this course
+                teacher_id INTEGER,
+                -- Timestamp when course was created
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Foreign key linking to the teacher user
+                FOREIGN KEY (teacher_id) REFERENCES users(id)
+            )
+        """)
 
-        columns_to_add = {
-            'course_id': "INTEGER",
-            'course_type': "TEXT DEFAULT 'Self-Paced'",
-            'duration': "TEXT DEFAULT 'Flexible'",
-            'level': "TEXT DEFAULT 'Beginner'",
-            'teacher_id': "INTEGER",
-            'created_at': "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-        }
+        # Migration: ensure `courses` table has expected columns when upgrading from older schema
+        try:
+            cursor.execute("PRAGMA table_info(courses)")
+            existing_cols = [row['name'] for row in cursor.fetchall()]
 
-        for col, definition in columns_to_add.items():
-            if col not in existing_cols:
+            columns_to_add = {
+                'course_id': "INTEGER",
+                'course_type': "TEXT DEFAULT 'Self-Paced'",
+                'duration': "TEXT DEFAULT 'Flexible'",
+                'level': "TEXT DEFAULT 'Beginner'",
+                'teacher_id': "INTEGER",
+                'created_at': "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            }
+
+            for col, definition in columns_to_add.items():
+                if col not in existing_cols:
+                    try:
+                        cursor.execute(f"ALTER TABLE courses ADD COLUMN {col} {definition}")
+                    except sqlite3.OperationalError:
+                        # If ALTER TABLE fails for any reason, ignore and continue - table will still be usable
+                        pass
+        except Exception:
+            # If PRAGMA or inspection fails, continue without raising to avoid breaking init on older DBs
+            pass
+        
+        # Create topics table for storing lesson topics within courses
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS topics (
+                -- Unique identifier for each topic
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- ID of the course this topic belongs to
+                course_id INTEGER NOT NULL,
+                -- Topic title (must be unique)
+                title TEXT UNIQUE,
+                -- Optional subtitle or description
+                subtitle TEXT,
+                -- Lesson content (body text for the lesson)
+                content TEXT,
+                -- Timestamp when topic was created
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Foreign key linking to courses table
+                FOREIGN KEY (course_id) REFERENCES courses(id)
+            )
+        """)
+        
+        # Migration: ensure `topics` table has content column
+        try:
+            cursor.execute("PRAGMA table_info(topics)")
+            existing_cols = [row['name'] for row in cursor.fetchall()]
+            if 'content' not in existing_cols:
                 try:
-                    cursor.execute(f"ALTER TABLE courses ADD COLUMN {col} {definition}")
+                    cursor.execute("ALTER TABLE topics ADD COLUMN content TEXT")
                 except sqlite3.OperationalError:
-                    # If ALTER TABLE fails for any reason, ignore and continue - table will still be usable
                     pass
-    except Exception:
-        # If PRAGMA or inspection fails, continue without raising to avoid breaking init on older DBs
-        pass
-    
-    # Create topics table for storing lesson topics within courses
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS topics (
-            -- Unique identifier for each topic
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            -- ID of the course this topic belongs to
-            course_id INTEGER NOT NULL,
-            -- Topic title (must be unique)
-            title TEXT UNIQUE,
-            -- Optional subtitle or description
-            subtitle TEXT,
-            -- Lesson content (body text for the lesson)
-            content TEXT,
-            -- Timestamp when topic was created
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Foreign key linking to courses table
-            FOREIGN KEY (course_id) REFERENCES courses(id)
-        )
-    """)
-    
-    # Migration: ensure `topics` table has content column
-    try:
-        cursor.execute("PRAGMA table_info(topics)")
-        existing_cols = [row['name'] for row in cursor.fetchall()]
-        if 'content' not in existing_cols:
-            try:
-                cursor.execute("ALTER TABLE topics ADD COLUMN content TEXT")
-            except sqlite3.OperationalError:
-                pass
-    except Exception:
-        pass
-    
-    # Create msqs table for storing multiple choice questions
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS msqs (
-            -- Unique identifier for each question
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            -- ID of the topic this question belongs to
-            topic_id INTEGER NOT NULL,
-            -- The question text
-            question TEXT NOT NULL,
-            -- Option A text
-            option_a TEXT NOT NULL,
-            -- Option B text
-            option_b TEXT NOT NULL,
-            -- Option C text
-            option_c TEXT NOT NULL,
-            -- Option D text
-            option_d TEXT NOT NULL,
-            -- Correct answer: 'a', 'b', 'c', or 'd'
-            correct_answer TEXT NOT NULL,
-            -- Timestamp when question was created
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Foreign key linking to topics table
-            FOREIGN KEY (topic_id) REFERENCES topics(id)
-        )
-    """)
-    
-    # Create enrollments table to track which students are enrolled in which courses
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS enrollments (
-            -- Unique identifier for each enrollment
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            -- ID of the student
-            student_id INTEGER NOT NULL,
-            -- ID of the course
-            course_id INTEGER NOT NULL,
-            -- Timestamp when student enrolled
-            enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Student's progress percentage (0-100)
-            progress INTEGER DEFAULT 0,
-            -- Foreign keys
-            FOREIGN KEY (student_id) REFERENCES users(id),
-            FOREIGN KEY (course_id) REFERENCES courses(id),
-            -- Unique constraint: each student can only enroll once per course
-            UNIQUE(student_id, course_id)
-        )
-    """)
-    
-    # Create submissions table to track student assignment submissions
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS submissions (
-            -- Unique identifier for each submission
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            -- ID of the student submitting
-            student_id INTEGER NOT NULL,
-            -- ID of the question being answered
-            question_id INTEGER NOT NULL,
-            -- Student's selected answer: 'a', 'b', 'c', or 'd'
-            selected_answer TEXT NOT NULL,
-            -- Whether the answer is correct (1 for correct, 0 for incorrect)
-            is_correct INTEGER DEFAULT 0,
-            -- Timestamp when answer was submitted
-            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Foreign keys
-            FOREIGN KEY (student_id) REFERENCES users(id),
-            FOREIGN KEY (question_id) REFERENCES msqs(id)
-        )
-    """)
-    
-    # Create attendance table to track student attendance in lessons
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS attendance (
-            -- Unique identifier for each attendance record
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            -- ID of the student
-            student_id INTEGER NOT NULL,
-            -- ID of the lesson/topic
-            lesson_id INTEGER NOT NULL,
-            -- ID of the course
-            course_id INTEGER NOT NULL,
-            -- Attendance status: 'present', 'absent', 'late'
-            status TEXT DEFAULT 'absent',
-            -- Date of the lesson
-            lesson_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Timestamp when attendance was recorded
-            recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Foreign keys
-            FOREIGN KEY (student_id) REFERENCES users(id),
-            FOREIGN KEY (lesson_id) REFERENCES topics(id),
-            FOREIGN KEY (course_id) REFERENCES courses(id)
-        )
-    """)
-    
-    # Create notifications table to notify students of new lessons and assignments
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS notifications (
-            -- Unique identifier for each notification
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            -- ID of the student receiving the notification
-            student_id INTEGER NOT NULL,
-            -- ID of the course
-            course_id INTEGER NOT NULL,
-            -- Type of notification: 'lesson', 'assignment'
-            notification_type TEXT NOT NULL,
-            -- Title of the notification
-            title TEXT NOT NULL,
-            -- Message content
-            message TEXT,
-            -- Link to the resource (lesson_id or assignment_id)
-            resource_id INTEGER,
-            -- Whether the notification has been read
-            is_read INTEGER DEFAULT 0,
-            -- Timestamp when notification was created
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Foreign keys
-            FOREIGN KEY (student_id) REFERENCES users(id),
-            FOREIGN KEY (course_id) REFERENCES courses(id)
-        )
-    """)
-    
-    # Create grades table to store assignment grades and teacher feedback
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS grades (
-            -- Unique identifier for each grade record
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            -- ID of the student being graded
-            student_id INTEGER NOT NULL,
-            -- ID of the assignment being graded
-            assignment_id INTEGER NOT NULL,
-            -- ID of the teacher giving the grade
-            teacher_id INTEGER NOT NULL,
-            -- Numeric grade (0-100)
-            grade REAL,
-            -- Feedback comments from the teacher
-            feedback TEXT,
-            -- Timestamp when grade was given
-            graded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Timestamp when last updated
-            updated_at TIMESTAMP,
-            -- Foreign keys
-            FOREIGN KEY (student_id) REFERENCES users(id),
-            FOREIGN KEY (assignment_id) REFERENCES assignments(id),
-            FOREIGN KEY (teacher_id) REFERENCES users(id)
-        )
-    """)
-    
-    # Create comments table for course discussions and student interactions
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS comments (
-            -- Unique identifier for each comment
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            -- ID of the user posting the comment
-            user_id INTEGER NOT NULL,
-            -- ID of the course the comment is about
-            course_id INTEGER NOT NULL,
-            -- Content of the comment/message
-            message TEXT NOT NULL,
-            -- Timestamp when comment was created
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Foreign keys
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (course_id) REFERENCES courses(id)
-        )
-    """)
-    
-    # Commit all changes to the database
-    conn.commit()
-    # Close the database connection
-    conn.close()
+        except Exception:
+            pass
+        
+        # Create msqs table for storing multiple choice questions
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS msqs (
+                -- Unique identifier for each question
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- ID of the topic this question belongs to
+                topic_id INTEGER NOT NULL,
+                -- The question text
+                question TEXT NOT NULL,
+                -- Option A text
+                option_a TEXT NOT NULL,
+                -- Option B text
+                option_b TEXT NOT NULL,
+                -- Option C text
+                option_c TEXT NOT NULL,
+                -- Option D text
+                option_d TEXT NOT NULL,
+                -- Correct answer: 'a', 'b', 'c', or 'd'
+                correct_answer TEXT NOT NULL,
+                -- Timestamp when question was created
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Foreign key linking to topics table
+                FOREIGN KEY (topic_id) REFERENCES topics(id)
+            )
+        """)
+        
+        # Create enrollments table to track which students are enrolled in which courses
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS enrollments (
+                -- Unique identifier for each enrollment
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- ID of the student
+                student_id INTEGER NOT NULL,
+                -- ID of the course
+                course_id INTEGER NOT NULL,
+                -- Timestamp when student enrolled
+                enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Student's progress percentage (0-100)
+                progress INTEGER DEFAULT 0,
+                -- Foreign keys
+                FOREIGN KEY (student_id) REFERENCES users(id),
+                FOREIGN KEY (course_id) REFERENCES courses(id),
+                -- Unique constraint: each student can only enroll once per course
+                UNIQUE(student_id, course_id)
+            )
+        """)
+        
+        # Create submissions table to track student assignment submissions
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS submissions (
+                -- Unique identifier for each submission
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- ID of the student submitting
+                student_id INTEGER NOT NULL,
+                -- ID of the question being answered
+                question_id INTEGER NOT NULL,
+                -- Student's selected answer: 'a', 'b', 'c', or 'd'
+                selected_answer TEXT NOT NULL,
+                -- Whether the answer is correct (1 for correct, 0 for incorrect)
+                is_correct INTEGER DEFAULT 0,
+                -- Timestamp when answer was submitted
+                submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Foreign keys
+                FOREIGN KEY (student_id) REFERENCES users(id),
+                FOREIGN KEY (question_id) REFERENCES msqs(id)
+            )
+        """)
+        
+        # Create attendance table to track student attendance in lessons
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS attendance (
+                -- Unique identifier for each attendance record
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- ID of the student
+                student_id INTEGER NOT NULL,
+                -- ID of the lesson/topic
+                lesson_id INTEGER NOT NULL,
+                -- ID of the course
+                course_id INTEGER NOT NULL,
+                -- Attendance status: 'present', 'absent', 'late'
+                status TEXT DEFAULT 'absent',
+                -- Date of the lesson
+                lesson_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Timestamp when attendance was recorded
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Foreign keys
+                FOREIGN KEY (student_id) REFERENCES users(id),
+                FOREIGN KEY (lesson_id) REFERENCES topics(id),
+                FOREIGN KEY (course_id) REFERENCES courses(id)
+            )
+        """)
+        
+        # Create notifications table to notify students of new lessons and assignments
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                -- Unique identifier for each notification
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- ID of the student receiving the notification
+                student_id INTEGER NOT NULL,
+                -- ID of the course
+                course_id INTEGER NOT NULL,
+                -- Type of notification: 'lesson', 'assignment'
+                notification_type TEXT NOT NULL,
+                -- Title of the notification
+                title TEXT NOT NULL,
+                -- Message content
+                message TEXT,
+                -- Link to the resource (lesson_id or assignment_id)
+                resource_id INTEGER,
+                -- Whether the notification has been read
+                is_read INTEGER DEFAULT 0,
+                -- Timestamp when notification was created
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Foreign keys
+                FOREIGN KEY (student_id) REFERENCES users(id),
+                FOREIGN KEY (course_id) REFERENCES courses(id)
+            )
+        """)
+        
+        # Create grades table to store assignment grades and teacher feedback
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS grades (
+                -- Unique identifier for each grade record
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- ID of the student being graded
+                student_id INTEGER NOT NULL,
+                -- ID of the assignment being graded
+                assignment_id INTEGER NOT NULL,
+                -- ID of the teacher giving the grade
+                teacher_id INTEGER NOT NULL,
+                -- Numeric grade (0-100)
+                grade REAL,
+                -- Feedback comments from the teacher
+                feedback TEXT,
+                -- Timestamp when grade was given
+                graded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Timestamp when last updated
+                updated_at TIMESTAMP,
+                -- Foreign keys
+                FOREIGN KEY (student_id) REFERENCES users(id),
+                FOREIGN KEY (assignment_id) REFERENCES assignments(id),
+                FOREIGN KEY (teacher_id) REFERENCES users(id)
+            )
+        """)
+        
+        # Create comments table for course discussions and student interactions
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS comments (
+                -- Unique identifier for each comment
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- ID of the user posting the comment
+                user_id INTEGER NOT NULL,
+                -- ID of the course the comment is about
+                course_id INTEGER NOT NULL,
+                -- Content of the comment/message
+                message TEXT NOT NULL,
+                -- Timestamp when comment was created
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- Foreign keys
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (course_id) REFERENCES courses(id)
+            )
+        """)
+        
+        # Commit all changes to the database
+        conn.commit()
+    finally:
+        # Always close the connection, even if an error occurs
+        conn.close()
 
 
 # Function to safely execute SELECT query with error handling
@@ -352,21 +379,23 @@ def safe_count_query(query, db_name="lms.db"):
     Returns:
         int: Count result or 0 if table doesn't exist
     """
+    conn = None
     try:
-        # Try to execute the query
         conn = get_db_connection(db_name)
         cursor = conn.cursor()
         # Execute the SQL query
         cursor.execute(query)
         # Fetch the result and get the count value
         result = cursor.fetchone()['count']
-        # Close the connection
-        conn.close()
         # Return the count
         return result
     except sqlite3.OperationalError:
         # If table doesn't exist, return 0 instead of crashing
         return 0
+    finally:
+        # Always close the connection
+        if conn:
+            conn.close()
 
 
 # Define route for homepage
@@ -446,29 +475,33 @@ def register():
         try:
             # Establish connection to the database
             conn = get_db_connection()
-            # Create cursor object to execute SQL commands
             cursor = conn.cursor()
             
-            # Hash the password for secure storage
-            hashed_password = hash_password(password)
+            try:
+                # Hash the password for secure storage
+                hashed_password = hash_password(password)
+                
+                # Execute SQL INSERT to add new user to database
+                cursor.execute("""
+                    INSERT INTO users (username, email, password, full_name, role)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (username, email, hashed_password, full_name, role))
+                
+                # Commit the changes to the database
+                conn.commit()
+                
+                # Redirect to login page after successful registration
+                return redirect(url_for('login'))
             
-            # Execute SQL INSERT to add new user to database
-            cursor.execute("""
-                INSERT INTO users (username, email, password, full_name, role)
-                VALUES (?, ?, ?, ?, ?)
-            """, (username, email, hashed_password, full_name, role))
-            
-            # Commit the changes to the database
-            conn.commit()
-            # Close the connection
-            conn.close()
-            
-            # Redirect to login page after successful registration
-            return redirect(url_for('login'))
+            except sqlite3.IntegrityError:
+                # Handle duplicate username or email
+                return render_template('register.html', error='Username or email already exists!')
+            finally:
+                # Always close the connection
+                conn.close()
         
-        except sqlite3.IntegrityError:
-            # Handle duplicate username or email
-            return render_template('register.html', error='Username or email already exists!')
+        except Exception as e:
+            return render_template('register.html', error='An error occurred during registration!')
     
     # If request is GET (display form)
     # Render the registration form template
@@ -502,44 +535,49 @@ def login():
         try:
             # Establish connection to the database
             conn = get_db_connection()
-            # Create cursor object to execute SQL queries
             cursor = conn.cursor()
             
-            # Execute SQL SELECT to find user with matching username
-            cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
-            # Fetch the user record from database
-            user = cursor.fetchone()
+            try:
+                # Execute SQL SELECT to find user with matching username
+                cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+                # Fetch the user record from database
+                user = cursor.fetchone()
+                
+                # Check if user exists
+                if user is None:
+                    # Return error if user not found
+                    return render_template('login.html', error='Username or password is incorrect!')
+                
+                # Hash the provided password and compare with stored hash
+                # This verifies the password without storing plain text
+                if hash_password(password) != user['password']:
+                    # Return error if password doesn't match
+                    return render_template('login.html', error='Username or password is incorrect!')
+                
+                # Create session for the logged-in user
+                # session is a dictionary that persists across requests for this user
+                session['user_id'] = user['id']
+                # Store username in session for easy access in templates
+                session['username'] = user['username']
+                # Store user role in session (student or teacher)
+                session['role'] = user['role']
+                # Store full name in session
+                session['full_name'] = user['full_name']
+                
+                # Update last_login timestamp in database (execute in finally to ensure connection closing)
+                conn.commit()
+            finally:
+                # Always close the connection after initial query
+                conn.close()
             
-            # Close the connection
-            conn.close()
-            
-            # Check if user exists
-            if user is None:
-                # Return error if user not found
-                return render_template('login.html', error='Username or password is incorrect!')
-            
-            # Hash the provided password and compare with stored hash
-            # This verifies the password without storing plain text
-            if hash_password(password) != user['password']:
-                # Return error if password doesn't match
-                return render_template('login.html', error='Username or password is incorrect!')
-            
-            # Create session for the logged-in user
-            # session is a dictionary that persists across requests for this user
-            session['user_id'] = user['id']
-            # Store username in session for easy access in templates
-            session['username'] = user['username']
-            # Store user role in session (student or teacher)
-            session['role'] = user['role']
-            # Store full name in session
-            session['full_name'] = user['full_name']
-            
-            # Update last_login timestamp in database
+            # Update last_login timestamp in database (outside initial connection)
             conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", (user['id'],))
-            conn.commit()
-            conn.close()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", (user['id'],))
+                conn.commit()
+            finally:
+                conn.close()
             
             # Redirect to appropriate dashboard based on user role
             if user['role'] == 'teacher':
@@ -595,6 +633,7 @@ def student_dashboard():
         # Redirect to home if not a student (maybe a teacher)
         return redirect(url_for('home'))
     
+    conn = None
     try:
         # Establish connection to the database
         conn = get_db_connection()
@@ -623,9 +662,6 @@ def student_dashboard():
         # Get the count
         available_courses_count = cursor.fetchone()['count']
         
-        # Close connection
-        conn.close()
-        
         # Render student dashboard template with courses
         return render_template('student_dashboard.html', 
                              enrolled_courses=enrolled_courses,
@@ -635,6 +671,10 @@ def student_dashboard():
     except Exception as e:
         # Handle any database errors
         return render_template('student_dashboard.html', enrolled_courses=[], error='Error loading courses')
+    finally:
+        # Always close the connection
+        if conn:
+            conn.close()
 
 
 # Define route for teacher dashboard
@@ -658,6 +698,7 @@ def teacher_dashboard():
         # Redirect to home if not a teacher (maybe a student)
         return redirect(url_for('home'))
     
+    conn = None
     try:
         # Establish connection to the database
         conn = get_db_connection()
@@ -709,6 +750,10 @@ def teacher_dashboard():
     except Exception as e:
         # Handle any database errors
         return render_template('teacher_dashboard.html', my_courses=[], error='Error loading courses')
+    finally:
+        # Always close the connection
+        if conn:
+            conn.close()
 
 
 # Define route for admin dashboard
@@ -732,6 +777,7 @@ def admin_dashboard():
         # Redirect to home if not an admin (maybe a student)
         return redirect(url_for('home'))
     
+    conn = None
     try:
         # Establish connection to the database
         conn = get_db_connection()
@@ -754,9 +800,6 @@ def admin_dashboard():
         cursor.execute("SELECT * FROM courses ORDER BY created_at DESC LIMIT 10")
         courses = cursor.fetchall()
         
-        # Close connection
-        conn.close()
-        
         # Render admin dashboard template with statistics
         return render_template('admin_dashboard.html',
                              users_count=users_count,
@@ -766,6 +809,10 @@ def admin_dashboard():
     except Exception as e:
         # Handle any database errors
         return render_template('admin_dashboard.html', error='Error loading admin data')
+    finally:
+        # Always close the connection
+        if conn:
+            conn.close()
 
 
 # Define route for course creation page (GET and POST)
@@ -809,6 +856,7 @@ def create_course():
             # Return error message if description is empty
             return render_template('create_course.html', error='Course description is required!')
         
+        conn = None
         try:
             # Establish connection to the database
             conn = get_db_connection()
@@ -825,8 +873,6 @@ def create_course():
             conn.commit()
             # Get the ID of the newly created course
             course_id = cursor.lastrowid
-            # Close the connection
-            conn.close()
             
             # Render success message and new course ID
             return render_template('create_course.html', 
@@ -840,6 +886,10 @@ def create_course():
                 return render_template('create_course.html', error='Database error. Please try again.')
         except Exception as e:
             return render_template('create_course.html', error=f'Error creating course: {str(e)}')
+        finally:
+            # Always close the connection
+            if conn:
+                conn.close()
     
     # If request is GET (display form)
     # Render the course creation form template
@@ -919,9 +969,6 @@ def manage_course(course_id):
         """, (course_id, course_id))
         assignments = cursor.fetchall()
         
-        # Close connection
-        conn.close()
-        
         # Render course management template with course details, lessons, and assignments
         return render_template('manage_course.html',
                              course=course,
@@ -932,6 +979,10 @@ def manage_course(course_id):
     except Exception as e:
         # Handle any database errors
         return render_template('error.html', error='Error loading course!')
+    finally:
+        # Always close the connection
+        if conn:
+            conn.close()
 
 
 # Define route for lesson creation page
@@ -963,7 +1014,6 @@ def create_lesson(course_id):
     try:
         # Establish connection to the database
         conn = get_db_connection()
-        # Create cursor object to execute SQL queries
         cursor = conn.cursor()
         
         # Fetch the course details for the given course ID
@@ -975,6 +1025,7 @@ def create_lesson(course_id):
         
         # If course not found or doesn't belong to this teacher, show error
         if not course:
+            conn.close()
             return render_template('error.html', error='Course not found or unauthorized!')
         
         # If request is POST (form submission)
@@ -989,55 +1040,60 @@ def create_lesson(course_id):
                 # Return error message if lesson title is empty
                 return render_template('create_lesson.html', course=course, error='Lesson title is required!')
             
-            # Execute SQL INSERT to add new lesson (topic) to database
-            cursor.execute("""
-                INSERT INTO topics (course_id, title, subtitle, content)
-                VALUES (?, ?, ?, ?)
-            """, (course_id, title, subtitle, content))
-            
-            # Get the lesson ID that was just created
-            lesson_id = cursor.lastrowid
-            
-            # Fetch all students enrolled in the course to notify them
-            cursor.execute("""
-                SELECT student_id FROM enrollments WHERE course_id = ?
-            """, (course_id,))
-            
-            students = cursor.fetchall()
-            
-            # Create notifications for all enrolled students
             try:
-                for student in students:
-                    cursor.execute("""
-                        INSERT INTO notifications (student_id, course_id, notification_type, title, message, resource_id)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (student['student_id'], course_id, 'lesson', 
-                          f"New Lesson: {title}", 
-                          f"A new lesson '{title}' has been added to the course.",
-                          lesson_id))
-                print(f"Created notifications for {len(students)} enrolled students in lesson '{title}'")
-            except Exception as notif_error:
-                print(f"Error creating notifications: {str(notif_error)}")
-            
-            # Commit the changes to the database
-            conn.commit()
-            # Close the connection
-            conn.close()
-            
-            # Render success message
-            return render_template('create_lesson.html', 
-                                 course=course,
-                                 success='Lesson created successfully!')
+                # Execute SQL INSERT to add new lesson (topic) to database
+                cursor.execute("""
+                    INSERT INTO topics (course_id, title, subtitle, content)
+                    VALUES (?, ?, ?, ?)
+                """, (course_id, title, subtitle, content))
+                
+                # Get the lesson ID that was just created
+                lesson_id = cursor.lastrowid
+                
+                # Fetch all students enrolled in the course to notify them
+                cursor.execute("""
+                    SELECT student_id FROM enrollments WHERE course_id = ?
+                """, (course_id,))
+                
+                students = cursor.fetchall()
+                
+                # Create notifications for all enrolled students
+                try:
+                    for student in students:
+                        cursor.execute("""
+                            INSERT INTO notifications (student_id, course_id, notification_type, title, message, resource_id)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        """, (student['student_id'], course_id, 'lesson', 
+                              f"New Lesson: {title}", 
+                              f"A new lesson '{title}' has been added to the course.",
+                              lesson_id))
+                    print(f"Created notifications for {len(students)} enrolled students in lesson '{title}'")
+                except Exception as notif_error:
+                    print(f"Error creating notifications: {str(notif_error)}")
+                
+                # Commit the changes to the database
+                conn.commit()
+                
+                # Render success message
+                return render_template('create_lesson.html', 
+                                     course=course,
+                                     success='Lesson created successfully!')
+            except Exception as e:
+                conn.rollback()
+                raise
         
         # If request is GET (display form)
         # Render the lesson creation form template
-        conn.close()
         return render_template('create_lesson.html', course=course)
     
     except Exception as e:
         # Handle any unexpected errors
         print(f"Error in create_lesson: {str(e)}")
         return render_template('error.html', error=f'Error creating lesson: {str(e)}')
+    finally:
+        # Always close the connection
+        if conn:
+            conn.close()
 
 
 # Define route for editing a lesson
@@ -1064,6 +1120,7 @@ def edit_lesson(lesson_id):
     if session.get('role') != 'teacher':
         return redirect(url_for('home'))
     
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1079,7 +1136,6 @@ def edit_lesson(lesson_id):
         lesson = cursor.fetchone()
         
         if not lesson:
-            conn.close()
             return render_template('error.html', error='Lesson not found!')
         
         # Verify teacher owns this course
@@ -1088,7 +1144,6 @@ def edit_lesson(lesson_id):
         """, (lesson['course_id'], session['user_id']))
         
         if not cursor.fetchone():
-            conn.close()
             return render_template('error.html', error='Unauthorized!')
         
         # If request is POST (form submission)
@@ -1100,25 +1155,30 @@ def edit_lesson(lesson_id):
             if not title:
                 return render_template('edit_lesson.html', lesson=lesson, error='Lesson title is required!')
             
-            # Update the lesson in database
-            cursor.execute("""
-                UPDATE topics 
-                SET title = ?, subtitle = ?, content = ?
-                WHERE id = ?
-            """, (title, subtitle, content, lesson_id))
-            
-            conn.commit()
-            conn.close()
-            
-            return render_template('edit_lesson.html', 
-                                 lesson=lesson,
-                                 success='Lesson updated successfully!')
+            try:
+                # Update the lesson in database
+                cursor.execute("""
+                    UPDATE topics 
+                    SET title = ?, subtitle = ?, content = ?
+                    WHERE id = ?
+                """, (title, subtitle, content, lesson_id))
+                
+                conn.commit()
+                
+                return render_template('edit_lesson.html', 
+                                     lesson=lesson,
+                                     success='Lesson updated successfully!')
+            except Exception as e:
+                conn.rollback()
+                raise
         
-        conn.close()
         return render_template('edit_lesson.html', lesson=lesson)
     
     except Exception as e:
         return render_template('error.html', error='Error editing lesson!')
+    finally:
+        if conn:
+            conn.close()
 
 
 # Define route for deleting a lesson
@@ -1141,6 +1201,7 @@ def delete_lesson(lesson_id):
     if session.get('role') != 'teacher':
         return redirect(url_for('home'))
     
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1152,7 +1213,6 @@ def delete_lesson(lesson_id):
         
         lesson = cursor.fetchone()
         if not lesson:
-            conn.close()
             return redirect(url_for('teacher_dashboard'))
         
         course_id = lesson['course_id']
@@ -1163,34 +1223,39 @@ def delete_lesson(lesson_id):
         """, (course_id, session['user_id']))
         
         if not cursor.fetchone():
-            conn.close()
             return render_template('error.html', error='Unauthorized!')
         
-        # Delete all submissions for questions in this lesson
-        cursor.execute("""
-            DELETE FROM submissions 
-            WHERE question_id IN (
-                SELECT id FROM msqs WHERE topic_id = ?
-            )
-        """, (lesson_id,))
-        
-        # Delete all questions for this lesson
-        cursor.execute("""
-            DELETE FROM msqs WHERE topic_id = ?
-        """, (lesson_id,))
-        
-        # Delete the lesson
-        cursor.execute("""
-            DELETE FROM topics WHERE id = ?
-        """, (lesson_id,))
-        
-        conn.commit()
-        conn.close()
+        try:
+            # Delete all submissions for questions in this lesson
+            cursor.execute("""
+                DELETE FROM submissions 
+                WHERE question_id IN (
+                    SELECT id FROM msqs WHERE topic_id = ?
+                )
+            """, (lesson_id,))
+            
+            # Delete all questions for this lesson
+            cursor.execute("""
+                DELETE FROM msqs WHERE topic_id = ?
+            """, (lesson_id,))
+            
+            # Delete the lesson
+            cursor.execute("""
+                DELETE FROM topics WHERE id = ?
+            """, (lesson_id,))
+            
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise
         
         return redirect(url_for('manage_course', course_id=course_id))
     
     except Exception as e:
         return render_template('error.html', error='Error deleting lesson!')
+    finally:
+        if conn:
+            conn.close()
 
 
 # Define route for deleting an assignment/question
@@ -1213,6 +1278,7 @@ def delete_assignment(assignment_id):
     if session.get('role') != 'teacher':
         return redirect(url_for('home'))
     
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1227,7 +1293,6 @@ def delete_assignment(assignment_id):
         
         assignment = cursor.fetchone()
         if not assignment:
-            conn.close()
             return redirect(url_for('teacher_dashboard'))
         
         course_id = assignment['course_id']
@@ -1238,26 +1303,31 @@ def delete_assignment(assignment_id):
         """, (course_id, session['user_id']))
         
         if not cursor.fetchone():
-            conn.close()
             return render_template('error.html', error='Unauthorized!')
         
-        # Delete all submissions for this question
-        cursor.execute("""
-            DELETE FROM submissions WHERE question_id = ?
-        """, (assignment_id,))
-        
-        # Delete the question/assignment
-        cursor.execute("""
-            DELETE FROM msqs WHERE id = ?
-        """, (assignment_id,))
-        
-        conn.commit()
-        conn.close()
+        try:
+            # Delete all submissions for this question
+            cursor.execute("""
+                DELETE FROM submissions WHERE question_id = ?
+            """, (assignment_id,))
+            
+            # Delete the question/assignment
+            cursor.execute("""
+                DELETE FROM msqs WHERE id = ?
+            """, (assignment_id,))
+            
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise
         
         return redirect(url_for('manage_course', course_id=course_id))
     
     except Exception as e:
         return render_template('error.html', error='Error deleting assignment!')
+    finally:
+        if conn:
+            conn.close()
 
 
 # Define route for assignment creation page
@@ -1286,6 +1356,7 @@ def create_assignment(course_id):
         # Redirect to home if not a teacher (maybe a student)
         return redirect(url_for('home'))
     
+    conn = None
     try:
         # Establish connection to the database
         conn = get_db_connection()
@@ -1332,76 +1403,81 @@ def create_assignment(course_id):
             if not all([question, option_a, option_b, option_c, option_d, correct_answer]):
                 return render_template('create_assignment.html', course=course, topics=topics, error='All fields are required!')
 
-            # If new topic title provided, create the topic and use its id
-            if new_topic_title and new_topic_title.strip():
-                cursor.execute("""
-                    INSERT INTO topics (course_id, title, subtitle)
-                    VALUES (?, ?, ?)
-                """, (course_id, new_topic_title.strip(), new_topic_subtitle))
-                conn.commit()
-                topic_id = cursor.lastrowid
-
-                # Refresh topics list so the new topic appears in the dropdown
-                cursor.execute("""
-                    SELECT id, title FROM topics
-                    WHERE course_id = ?
-                    ORDER BY created_at DESC
-                """, (course_id,))
-                topics = cursor.fetchall()
-
-            # Ensure topic_id is an int
             try:
-                topic_id = int(topic_id)
-            except Exception:
-                return render_template('create_assignment.html', course=course, topics=topics, error='Invalid topic selected')
-
-            # Execute SQL INSERT to add new assignment (question) to database
-            cursor.execute("""
-                INSERT INTO msqs (topic_id, question, option_a, option_b, option_c, option_d, correct_answer)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (topic_id, question, option_a, option_b, option_c, option_d, correct_answer))
-            
-            # Get the assignment ID that was just created
-            assignment_id = cursor.lastrowid
-            
-            # Fetch all students enrolled in the course to notify them
-            cursor.execute("""
-                SELECT student_id FROM enrollments WHERE course_id = ?
-            """, (course_id,))
-            
-            students = cursor.fetchall()
-            
-            # Create notifications for all enrolled students
-            try:
-                for student in students:
+                # If new topic title provided, create the topic and use its id
+                if new_topic_title and new_topic_title.strip():
                     cursor.execute("""
-                        INSERT INTO notifications (student_id, course_id, notification_type, title, message, resource_id)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (student['student_id'], course_id, 'assignment', 
-                          f"New Assignment: {question[:50]}...", 
-                          f"A new assignment has been added: {question[:80]}",
-                          assignment_id))
-                print(f"Created notifications for {len(students)} enrolled students in assignment: {question[:50]}...")
-            except Exception as notif_error:
-                print(f"Error creating assignment notifications: {str(notif_error)}")
+                        INSERT INTO topics (course_id, title, subtitle)
+                        VALUES (?, ?, ?)
+                    """, (course_id, new_topic_title.strip(), new_topic_subtitle))
+                    conn.commit()
+                    topic_id = cursor.lastrowid
 
-            # Commit the changes to the database
-            conn.commit()
-            # Close the connection
-            conn.close()
+                    # Refresh topics list so the new topic appears in the dropdown
+                    cursor.execute("""
+                        SELECT id, title FROM topics
+                        WHERE course_id = ?
+                        ORDER BY created_at DESC
+                    """, (course_id,))
+                    topics = cursor.fetchall()
 
-            # Render success message and select the topic that was used
-            return render_template('create_assignment.html', course=course, topics=topics, success='Assignment created successfully!', selected_topic_id=topic_id)
+                # Ensure topic_id is an int
+                try:
+                    topic_id = int(topic_id)
+                except Exception:
+                    return render_template('create_assignment.html', course=course, topics=topics, error='Invalid topic selected')
+
+                # Execute SQL INSERT to add new assignment (question) to database
+                cursor.execute("""
+                    INSERT INTO msqs (topic_id, question, option_a, option_b, option_c, option_d, correct_answer)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (topic_id, question, option_a, option_b, option_c, option_d, correct_answer))
+                
+                # Get the assignment ID that was just created
+                assignment_id = cursor.lastrowid
+                
+                # Fetch all students enrolled in the course to notify them
+                cursor.execute("""
+                    SELECT student_id FROM enrollments WHERE course_id = ?
+                """, (course_id,))
+                
+                students = cursor.fetchall()
+                
+                # Create notifications for all enrolled students
+                try:
+                    for student in students:
+                        cursor.execute("""
+                            INSERT INTO notifications (student_id, course_id, notification_type, title, message, resource_id)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        """, (student['student_id'], course_id, 'assignment', 
+                              f"New Assignment: {question[:50]}...", 
+                              f"A new assignment has been added: {question[:80]}",
+                              assignment_id))
+                    print(f"Created notifications for {len(students)} enrolled students in assignment: {question[:50]}...")
+                except Exception as notif_error:
+                    print(f"Error creating assignment notifications: {str(notif_error)}")
+
+                # Commit the changes to the database
+                conn.commit()
+
+                # Render success message and select the topic that was used
+                return render_template('create_assignment.html', course=course, topics=topics, success='Assignment created successfully!', selected_topic_id=topic_id)
+            except Exception as e:
+                conn.rollback()
+                raise
         
         # If request is GET (display form)
         # Render the assignment creation form template
-        conn.close()
         return render_template('create_assignment.html', course=course, topics=topics)
     
     except Exception as e:
         # Handle any unexpected errors
         print(f"Error in create_assignment: {str(e)}")
         return render_template('error.html', error=f'Error creating assignment: {str(e)}')
+    finally:
+        # Always close the connection
+        if conn:
+            conn.close()
 
 
 # Define route for lessons page
@@ -1415,6 +1491,7 @@ def lessons():
     Returns:
         Rendered HTML template with lessons data
     """
+    conn = None
     try:
         # Try to fetch lessons from database
         # Establish connection to the database
@@ -1423,13 +1500,6 @@ def lessons():
         cursor = conn.cursor()
         
         # Execute SQL query to fetch all lessons with related course information
-        # SELECT: Choose which columns to fetch
-        # t.id, t.title, t.subtitle: Get topic ID, title, and subtitle
-        # c.title as course_title: Get course title and alias it as course_title
-        # FROM topics t: Select from topics table, alias it as 't'
-        # LEFT JOIN courses c: Join with courses table to get course info
-        # ON t.course_id = c.id: Join condition - match topic's course_id with course's id
-        # ORDER BY t.id DESC: Sort results by topic ID in descending order (newest first)
         cursor.execute("""
             SELECT t.id, t.title, t.subtitle, c.title as course_title 
             FROM topics t 
@@ -1438,11 +1508,13 @@ def lessons():
         """)
         # Fetch all results from the query and store in lessons_data list
         lessons_data = cursor.fetchall()
-        # Close the database connection to free resources
-        conn.close()
     except sqlite3.OperationalError:
         # If topics table doesn't exist, return empty list
         lessons_data = []
+    finally:
+        # Always close the connection
+        if conn:
+            conn.close()
     
     # Render lessons.html template and pass lessons data as variable
     # The template can loop through this data with {% for lesson in lessons %}
@@ -1461,6 +1533,7 @@ def view_lesson(lesson_id):
     Returns:
         Rendered lesson detail page
     """
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1476,7 +1549,6 @@ def view_lesson(lesson_id):
         lesson = cursor.fetchone()
         
         if not lesson:
-            conn.close()
             return render_template('error.html', error='Lesson not found!')
         
         # Fetch all questions/assignments for this lesson
@@ -1488,7 +1560,6 @@ def view_lesson(lesson_id):
         """, (lesson_id,))
         
         questions = cursor.fetchall()
-        conn.close()
         
         return render_template('lesson_detail.html', 
                              lesson=lesson,
@@ -1496,6 +1567,9 @@ def view_lesson(lesson_id):
     
     except Exception as e:
         return render_template('error.html', error='Error loading lesson!')
+    finally:
+        if conn:
+            conn.close()
 
 
 # Define route for courses page
@@ -1512,6 +1586,7 @@ def course():
     all_courses = []
     user_id = session.get('user_id')
     user_role = session.get('role')
+    conn = None
     
     try:
         conn = get_db_connection()
@@ -1538,10 +1613,11 @@ def course():
                 ORDER BY c.id DESC
             """, (user_id,))
             enrolled_courses = cursor.fetchall()
-        
-        conn.close()
     except sqlite3.OperationalError:
         pass
+    finally:
+        if conn:
+            conn.close()
     
     return render_template('course.html', 
                          all_courses=all_courses,
@@ -1577,6 +1653,7 @@ def learn_course(course_id):
     if session.get('role') != 'student':
         return redirect(url_for('home'))
     
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1593,7 +1670,6 @@ def learn_course(course_id):
         course = cursor.fetchone()
         
         if not course:
-            conn.close()
             return render_template('error.html', error='Course not found!')
         
         # Check if student is enrolled in this course
@@ -1605,7 +1681,6 @@ def learn_course(course_id):
         enrollment = cursor.fetchone()
         
         if not enrollment:
-            conn.close()
             return render_template('error.html', error='You are not enrolled in this course!')
         
         # Fetch all lessons/topics for this course
@@ -1641,8 +1716,6 @@ def learn_course(course_id):
         stats = cursor.fetchone()
         correct_submissions = stats['total_correct'] if stats else 0
         
-        conn.close()
-        
         return render_template('learn_course.html',
                              course=course,
                              lessons=lessons,
@@ -1653,6 +1726,9 @@ def learn_course(course_id):
     
     except Exception as e:
         return render_template('error.html', error='Error loading course!')
+    finally:
+        if conn:
+            conn.close()
 
 
 # Define route for assignments page
@@ -1666,6 +1742,7 @@ def assignments():
     Returns:
         Rendered HTML template with assignments data
     """
+    conn = None
     try:
         # Try to fetch assignments from database
         # Establish connection to the database
@@ -1674,15 +1751,6 @@ def assignments():
         cursor = conn.cursor()
         
         # Execute SQL query to fetch all multiple choice questions
-        # SELECT m.id: Get question ID
-        # m.question: Get the question text
-        # t.title as topic_title: Get topic title and alias as topic_title
-        # m.option_a, m.option_b, m.option_c, m.option_d: Get all answer options
-        # FROM msqs m: Select from msqs (multiple choice questions) table, alias as 'm'
-        # LEFT JOIN topics t: Join with topics table to get topic info
-        # ON m.topic_id = t.id: Join condition - match question's topic_id with topic's id
-        # ORDER BY m.id DESC: Sort by question ID in descending order (newest first)
-        # LIMIT 20: Fetch only the first 20 questions
         cursor.execute("""
             SELECT m.id, m.question, t.title as topic_title, 
                    m.option_a, m.option_b, m.option_c, m.option_d
@@ -1693,11 +1761,13 @@ def assignments():
         """)
         # Fetch all results from the query and store in assignments_data list
         assignments_data = cursor.fetchall()
-        # Close the database connection to free resources
-        conn.close()
     except sqlite3.OperationalError:
         # If msqs table doesn't exist, return empty list
         assignments_data = []
+    finally:
+        # Always close the connection
+        if conn:
+            conn.close()
     
     # Render assignments.html template and pass assignments data as variable
     # The template can loop through this data with {% for assignment in assignments %}
@@ -1726,6 +1796,7 @@ def enroll_course(course_id):
         # Redirect to home if not a student (maybe a teacher)
         return redirect(url_for('home'))
     
+    conn = None
     try:
         # Establish connection to the database
         conn = get_db_connection()
@@ -1740,11 +1811,14 @@ def enroll_course(course_id):
         
         # Commit the changes to the database
         conn.commit()
-        # Close the connection
-        conn.close()
     except sqlite3.IntegrityError:
         # Handle case where enrollment already exists (duplicate key)
         pass
+    except Exception as e:
+        pass
+    finally:
+        if conn:
+            conn.close()
     
     # Redirect to student dashboard after enrolling
     return redirect(url_for('student_dashboard'))
@@ -1773,6 +1847,7 @@ def mark_attendance(lesson_id):
     if session.get('role') != 'teacher':
         return redirect(url_for('home'))
     
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1788,7 +1863,6 @@ def mark_attendance(lesson_id):
         lesson = cursor.fetchone()
         
         if not lesson:
-            conn.close()
             return render_template('error.html', error='Lesson not found or unauthorized!')
         
         course_id = lesson['course_id']
@@ -1797,39 +1871,42 @@ def mark_attendance(lesson_id):
             # Get form data for all students
             attendance_data = request.form.to_dict()
             
-            # Process each student
-            for key, value in attendance_data.items():
-                if key.startswith('attendance_'):
-                    try:
-                        student_id = int(key.split('_')[1])
-                        status = value  # 'present', 'absent', 'late'
-                        
-                        # Check if attendance record exists for today
-                        cursor.execute("""
-                            SELECT id FROM attendance
-                            WHERE student_id = ? AND lesson_id = ? AND DATE(lesson_date) = DATE('now')
-                        """, (student_id, lesson_id))
-                        
-                        existing = cursor.fetchone()
-                        
-                        if existing:
-                            # Update existing record
+            try:
+                # Process each student
+                for key, value in attendance_data.items():
+                    if key.startswith('attendance_'):
+                        try:
+                            student_id = int(key.split('_')[1])
+                            status = value  # 'present', 'absent', 'late'
+                            
+                            # Check if attendance record exists for today
                             cursor.execute("""
-                                UPDATE attendance
-                                SET status = ?
+                                SELECT id FROM attendance
                                 WHERE student_id = ? AND lesson_id = ? AND DATE(lesson_date) = DATE('now')
-                            """, (status, student_id, lesson_id))
-                        else:
-                            # Insert new record
-                            cursor.execute("""
-                                INSERT INTO attendance (student_id, lesson_id, course_id, status)
-                                VALUES (?, ?, ?, ?)
-                            """, (student_id, lesson_id, course_id, status))
-                    except (ValueError, IndexError):
-                        continue
-            
-            conn.commit()
-            conn.close()
+                            """, (student_id, lesson_id))
+                            
+                            existing = cursor.fetchone()
+                            
+                            if existing:
+                                # Update existing record
+                                cursor.execute("""
+                                    UPDATE attendance
+                                    SET status = ?
+                                    WHERE student_id = ? AND lesson_id = ? AND DATE(lesson_date) = DATE('now')
+                                """, (status, student_id, lesson_id))
+                            else:
+                                # Insert new record
+                                cursor.execute("""
+                                    INSERT INTO attendance (student_id, lesson_id, course_id, status)
+                                    VALUES (?, ?, ?, ?)
+                                """, (student_id, lesson_id, course_id, status))
+                        except (ValueError, IndexError):
+                            continue
+                
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                raise
             
             return redirect(url_for('manage_course', course_id=course_id))
         
@@ -1852,8 +1929,6 @@ def mark_attendance(lesson_id):
         
         attendance_records = {row['student_id']: row['status'] for row in cursor.fetchall()}
         
-        conn.close()
-        
         return render_template('mark_attendance.html',
                              lesson=lesson,
                              students=students,
@@ -1862,6 +1937,9 @@ def mark_attendance(lesson_id):
     
     except Exception as e:
         return render_template('error.html', error='Error marking attendance!')
+    finally:
+        if conn:
+            conn.close()
 
 
 # Define route for viewing attendance reports
@@ -1969,6 +2047,7 @@ def submit_assignment():
         # Redirect to home if not a student
         return redirect(url_for('home'))
     
+    conn = None
     try:
         # Establish connection to the database
         conn = get_db_connection()
@@ -2031,9 +2110,6 @@ def submit_assignment():
         # Calculate percentage score
         percentage_score = int((total_correct / total_questions * 100)) if total_questions > 0 else 0
         
-        # Close the connection
-        conn.close()
-        
         # Redirect to results page with statistics
         return redirect(url_for('assignment_results', 
                               correct=total_correct, 
@@ -2043,6 +2119,9 @@ def submit_assignment():
     except Exception as e:
         # Log error and redirect back to assignments
         return redirect(url_for('assignments'))
+    finally:
+        if conn:
+            conn.close()
 
 
 # Define route for viewing assignment results
@@ -2108,6 +2187,7 @@ def my_assignments():
     if session.get('role') != 'student':
         return redirect(url_for('home'))
     
+    conn = None
     try:
         # Establish connection to the database
         conn = get_db_connection()
@@ -2151,8 +2231,6 @@ def my_assignments():
         correct_answers = stats['correct_answers'] if stats['correct_answers'] else 0
         overall_percentage = int((correct_answers / total_submissions * 100)) if total_submissions > 0 else 0
         
-        conn.close()
-        
         return render_template('my_assignments.html',
                              submissions=submissions,
                              total_submissions=total_submissions,
@@ -2161,6 +2239,9 @@ def my_assignments():
     
     except Exception as e:
         return render_template('error.html', error='Error loading your assignments!')
+    finally:
+        if conn:
+            conn.close()
 
 
 # Define route for viewing assignment submissions for grading
