@@ -15,6 +15,7 @@ app = Flask(__name__)
 # This ensures user sessions are secure and cannot be tampered with
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
+
 # Context manager for database connections
 from contextlib import contextmanager
 
@@ -41,6 +42,10 @@ def get_db():
         raise
     finally:
         conn.close()
+
+
+# Function to establish database connection (kept for backward compatibility)
+def get_db_connection(db_name="lms.db"):
     """
     Connect to the SQLite database and return connection object.
     
