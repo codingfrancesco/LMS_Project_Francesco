@@ -345,6 +345,24 @@ def init_db():
             )
         """)
         
+        # Create assignments table for course assignments
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS assignments (
+                -- Unique identifier for each assignment
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- ID of the course this assignment belongs to
+                course_id INTEGER NOT NULL,
+                -- Title of the assignment
+                title TEXT NOT NULL UNIQUE,
+                -- Description of the assignment
+                description TEXT,
+                -- Deadline for the assignment
+                deadline TEXT,
+                -- Foreign key linking to courses table
+                FOREIGN KEY (course_id) REFERENCES courses(id)
+            )
+        """)
+        
         # Create comments table for course discussions and student interactions
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS comments (
@@ -964,7 +982,7 @@ def manage_course(course_id):
         cursor.execute("""
             SELECT a.id, a.title, a.description, a.deadline,
                    COUNT(DISTINCT g.id) as graded_count,
-                   COUNT(DISTINCT u.id) as total_students
+                   COUNT(DISTINCT u.student_id) as total_students
             FROM assignments a
             LEFT JOIN grades g ON a.id = g.assignment_id
             LEFT JOIN (SELECT DISTINCT student_id FROM enrollments WHERE course_id = ?) u ON 1=1
@@ -982,8 +1000,12 @@ def manage_course(course_id):
                              questions=questions)
     
     except Exception as e:
-        # Handle any database errors
-        return render_template('error.html', error='Error loading course!')
+        # Handle any database errors with detailed error message
+        import traceback
+        error_msg = f"Error loading course: {str(e)}"
+        print(f"DEBUG: {error_msg}")
+        print(traceback.format_exc())
+        return render_template('error.html', error=error_msg)
     finally:
         # Always close the connection
         if conn:
@@ -1730,7 +1752,11 @@ def learn_course(course_id):
                              total_assignments=len(assignments))
     
     except Exception as e:
-        return render_template('error.html', error='Error loading course!')
+        import traceback
+        error_msg = f"Error loading course: {str(e)}"
+        print(f"DEBUG: {error_msg}")
+        print(traceback.format_exc())
+        return render_template('error.html', error=error_msg)
     finally:
         if conn:
             conn.close()
